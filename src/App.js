@@ -25,6 +25,7 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState(null);
   const [currentVideoId, setCurrentVideoId] = useState(null);
   const [volume, setVolume] = useState(50);
+  const [iosPrompted, setIosPrompted] = useState(() => localStorage.getItem('iosAutoplayAcknowledged') === 'true');
 
   const loader = useRef(null);
   const playerRef = useRef(null);
@@ -33,6 +34,8 @@ function App() {
   const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
   const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
   const RESPONSE_TYPE = 'token';
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   useEffect(() => {
     const savedViews = localStorage.getItem('personalViews');
@@ -156,6 +159,12 @@ function App() {
     }
   };
 
+  const acknowledgeIosAutoplay = () => {
+    localStorage.setItem('iosAutoplayAcknowledged', 'true');
+    setIosPrompted(true);
+    setCurrentVideoId(playlistVideos[0]?.snippet.resourceId?.videoId);
+  };
+
   const SettingsDrawer = () => (
     <>
       {showSettings && (
@@ -224,15 +233,22 @@ function App() {
                 setCurrentVideoId(null);
               }}>← Back to Playlists</button>
               <h2>{selectedPlaylist.snippet.title}</h2>
-              <YouTube
-                videoId={currentVideoId}
-                opts={{ playerVars: { autoplay: 1 } }}
-                onEnd={handleVideoEnd}
-                onReady={(event) => {
-                  playerRef.current = event.target;
-                  playerRef.current.setVolume(volume);
-                }}
-              />
+              {!iosPrompted && isIOS && autoPlay && (
+                <div style={{ textAlign: 'center', margin: '20px' }}>
+                  <button onClick={acknowledgeIosAutoplay}>▶ Start Watching</button>
+                </div>
+              )}
+              {(!isIOS || iosPrompted || !autoPlay) && (
+                <YouTube
+                  videoId={currentVideoId}
+                  opts={{ playerVars: { autoplay: 1 } }}
+                  onEnd={handleVideoEnd}
+                  onReady={(event) => {
+                    playerRef.current = event.target;
+                    playerRef.current.setVolume(volume);
+                  }}
+                />
+              )}
               <div>
                 <button onClick={() => skipVideo(-1)}>Previous</button>
                 <button onClick={() => skipVideo(1)}>Next</button>
