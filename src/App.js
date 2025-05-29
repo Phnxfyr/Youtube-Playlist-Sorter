@@ -100,7 +100,7 @@ function App() {
       const finalSorted = sortVideos(combined, sortType, sortDirection);
       setPlaylistVideos(finalSorted);
       setCurrentIndex(0);
-      setCurrentVideoId(combined[0]?.snippet.resourceId?.videoId || null);
+      setCurrentVideoId(finalSorted[0]?.snippet.resourceId?.videoId || null);
     }
   };
 
@@ -153,133 +153,110 @@ function App() {
   };
 
   const SettingsDrawer = () => (
-    <div className={`settings-drawer ${showSettings ? 'open' : ''}`}>
-      <h2>Settings</h2>
-      <div className="tab-buttons">
-        <button onClick={() => setActiveTab('general')}>General</button>
-        <button onClick={() => setActiveTab('theme')}>Theme</button>
-        <button onClick={() => setActiveTab('account')}>Account</button>
-      </div>
-      <div className={`tab-content ${activeTab === 'general' ? 'active' : ''}`}>
-        <button onClick={() => {
-          setPersonalViews({});
-          localStorage.removeItem('personalViews');
-        }}>Reset Personal Views</button>
-        <button onClick={() => setAutoPlay(!autoPlay)}>
-          {autoPlay ? 'Disable Autoplay' : 'Enable Autoplay'}
-        </button>
-      </div>
-      <div className={`tab-content ${activeTab === 'theme' ? 'active' : ''}`}>
-        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-          {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
-        </button>
-      </div>
-      <div className={`tab-content ${activeTab === 'account' ? 'active' : ''}`}>
-        <button onClick={() => {
-          setToken('');
-          setIsLoggedIn(false);
-          setPlaylists([]);
-          setSelectedPlaylist(null);
-          setPlaylistVideos([]);
-          window.location.hash = '';
-          setShowSettings(false);
-        }}>Logout / Switch User</button>
-      </div>
-    </div>
+    <>
+      {showSettings && (
+        <>
+          <div className="drawer-overlay" onClick={() => setShowSettings(false)} />
+          <div className={`settings-drawer open`}>
+            <h2>Settings</h2>
+            <div className="tab-buttons">
+              <button onClick={() => setActiveTab('general')}>General</button>
+              <button onClick={() => setActiveTab('theme')}>Theme</button>
+              <button onClick={() => setActiveTab('account')}>Account</button>
+            </div>
+            <div className={`tab-content ${activeTab === 'general' ? 'active' : ''}`}>
+              <button onClick={() => {
+                setPersonalViews({});
+                localStorage.removeItem('personalViews');
+              }}>Reset Personal Views</button>
+              <button onClick={() => setAutoPlay(!autoPlay)}>
+                {autoPlay ? 'Disable Autoplay' : 'Enable Autoplay'}
+              </button>
+            </div>
+            <div className={`tab-content ${activeTab === 'theme' ? 'active' : ''}`}>
+              <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+                {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
+              </button>
+            </div>
+            <div className={`tab-content ${activeTab === 'account' ? 'active' : ''}`}>
+              <button onClick={() => {
+                setToken('');
+                setIsLoggedIn(false);
+                setPlaylists([]);
+                setSelectedPlaylist(null);
+                setPlaylistVideos([]);
+                window.location.hash = '';
+                setShowSettings(false);
+              }}>Logout / Switch User</button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 
   return (
     <div className={theme}>
-      {!isLoggedIn ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '20vh' }}>
-          <button onClick={handleLogin}>Log in with Google</button>
-          <br /><br />
-          <a href="#" onClick={() => alert('Privacy Policy goes here.')}>Privacy Policy</a> |
-          <a href="#" onClick={() => alert('Terms and Conditions go here.')}> Terms & Conditions</a>
-        </div>
-      ) : (
-        <div style={{ display: 'flex' }}>
-          <aside style={{ width: showSidebar ? '250px' : '40px', position: 'sticky', top: '1rem', height: '100vh', overflowY: 'auto' }}>
-            <button onClick={() => setShowSidebar(!showSidebar)}>{showSidebar ? '◀️' : '▶️'}</button>
-            {showSidebar && (
+      {isLoggedIn ? (
+        <>
+          <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
+          {SettingsDrawer()}
+          {!selectedPlaylist ? (
+            <ul>
+              {playlists.map((pl) => (
+                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer', marginBottom: '1rem' }}>
+                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
+                  <strong>{pl.snippet.title}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>
+              <h2>{selectedPlaylist.snippet.title}</h2>
+              <YouTube
+                videoId={currentVideoId}
+                opts={{ playerVars: { autoplay: 1 } }}
+                onEnd={handleVideoEnd}
+                onReady={(event) => {
+                  playerRef.current = event.target;
+                  playerRef.current.setVolume(volume);
+                }}
+              />
               <div>
-                <h3>Options</h3>
+                <button onClick={() => skipVideo(-1)}>Previous</button>
+                <button onClick={() => skipVideo(1)}>Next</button>
+                <input type="range" min="0" max="100" value={volume} onChange={(e) => {
+                  const vol = parseInt(e.target.value);
+                  setVolume(vol);
+                  if (playerRef.current) playerRef.current.setVolume(vol);
+                }} />
+              </div>
+              <div>
                 <button onClick={() => sortPlaylistVideos('title')}>Sort by Title</button>
                 <button onClick={() => sortPlaylistVideos('views')}>Sort by Personal Views</button>
                 <button onClick={() => sortPlaylistVideos('dateAdded')}>Sort by Date Added</button>
                 <button onClick={() => sortPlaylistVideos('datePublished')}>Sort by Date Published</button>
-                <p>Order: {sortDirection === 'asc' ? 'Ascending' : 'Descending'}</p>
-                <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
+                <span>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</span>
               </div>
-            )}
-          </aside>
-          <main style={{ flexGrow: 1, padding: '1rem' }}>
-            {SettingsDrawer()}
-            {selectedPlaylist ? (
-              <div>
-                <h2>{selectedPlaylist.snippet.title}</h2>
-                {currentVideoId && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <YouTube
-                      videoId={currentVideoId}
-                      opts={{
-                        width: '100%',
-                        playerVars: {
-                          autoplay: 1,
-                          controls: 1,
-                          volume: volume
-                        }
-                      }}
-                      onEnd={handleVideoEnd}
-                      onReady={e => {
-                        playerRef.current = e.target;
-                        e.target.setVolume(volume);
-                      }}
-                    />
-                    <div style={{ marginTop: '0.5rem' }}>
-                      <button onClick={() => skipVideo(-1)}>⏮ Prev</button>
-                      <button onClick={() => skipVideo(1)}>⏭ Next</button>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={volume}
-                        onChange={(e) => {
-                          setVolume(Number(e.target.value));
-                          if (playerRef.current) playerRef.current.setVolume(Number(e.target.value));
-                        }}
-                      />
-                      Volume: {volume}%
-                    </div>
-                  </div>
-                )}
-                <ul>
-                  {playlistVideos.map((video, index) => (
-                    <li key={video.snippet.resourceId?.videoId || index} style={{ marginBottom: '1rem' }}>
-                      <span>{index + 1}. </span>
-                      <img src={video.snippet.thumbnails?.default?.url} alt="thumb" style={{ verticalAlign: 'middle' }} />
+              <ul>
+                {playlistVideos.map((video, index) => (
+                  index >= currentIndex && (
+                    <li key={video.snippet.resourceId?.videoId || index}>
+                      <span style={{ marginRight: '8px' }}>{index + 1}.</span>
+                      <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
                       <strong>{video.snippet.title}</strong>
+                      <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
                     </li>
-                  ))}
-                </ul>
-                <div ref={loader} style={{ height: '20px' }} />
-                <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>⬆ Back to Top</button>
-              </div>
-            ) : (
-              <div>
-                <h2>Your Playlists</h2>
-                <ul>
-                  {playlists.map((pl) => (
-                    <li key={pl.id} style={{ cursor: 'pointer', marginBottom: '1rem' }} onClick={() => fetchPlaylistVideos(pl)}>
-                      <img src={pl.snippet.thumbnails?.default?.url || pl.snippet.thumbnails?.medium?.url || ''} alt="thumbnail" />
-                      <br />
-                      <strong>{pl.snippet.title}</strong>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </main>
+                  )
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ textAlign: 'center', marginTop: '100px' }}>
+          <button onClick={handleLogin}>Log in with Google</button>
+          <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
         </div>
       )}
     </div>
