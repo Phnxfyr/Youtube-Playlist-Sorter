@@ -127,14 +127,17 @@ function App() {
   };
 
   const handleVideoEnd = () => {
-    if (!autoPlay || currentIndex == null) return;
+    if (currentIndex == null) return;
     const currentVideo = playlistVideos[currentIndex];
     const videoId = currentVideo.snippet.resourceId?.videoId;
+
     setPersonalViews((prev) => {
       const updated = { ...prev, [videoId]: (prev[videoId] || 0) + 1 };
       localStorage.setItem('personalViews', JSON.stringify(updated));
       return updated;
     });
+
+    if (!autoPlay) return;
 
     const nextIndex = currentIndex + 1;
     if (nextIndex < playlistVideos.length) {
