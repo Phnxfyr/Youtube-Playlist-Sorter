@@ -147,7 +147,7 @@ function App() {
 
   return (
     <div className={theme} style={{ display: 'flex', fontFamily: 'Arial', maxWidth: '1200px', margin: 'auto' }}>
-      {showSettings && (
+      {isLoggedIn && showSettings && (
         <div className={`settings-drawer ${showSettings ? 'open' : ''}`}>
           <h2>Settings</h2>
           <div className="tab-buttons">
@@ -193,7 +193,7 @@ function App() {
       <main style={{ flexGrow: 1 }}>
         <header>
           <h1>YouTube Playlist Sorter</h1>
-          <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
+          {isLoggedIn && <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>}
         </header>
         {!isLoggedIn ? (
           <button onClick={handleLogin}>Log in with Google</button>
