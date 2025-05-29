@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import YouTube from 'react-youtube';
 import './App.css';
 
 function App() {
@@ -66,7 +67,7 @@ function App() {
 
   const fetchPlaylists = async (accessToken) => {
     const res = await fetch(
-      'https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true&maxResults=20',
+      'https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true&maxResults=50',
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -102,24 +103,6 @@ function App() {
       setCurrentVideoId(combined[0]?.snippet.resourceId?.videoId || null);
     }
   };
-
-  useEffect(() => {
-    if (!loader.current) return;
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting && selectedPlaylist && nextPageToken) {
-          fetchPlaylistVideos(selectedPlaylist, nextPageToken);
-        }
-      },
-      { threshold: 1.0 }
-    );
-    observer.observe(loader.current);
-    return () => observer.disconnect();
-  }, [nextPageToken, selectedPlaylist]);
-
-  useEffect(() => {
-    localStorage.setItem('showSidebar', showSidebar);
-  }, [showSidebar]);
 
   const sortVideos = (videos, type, direction) => {
     const factor = direction === 'asc' ? 1 : -1;
@@ -182,6 +165,9 @@ function App() {
           setPersonalViews({});
           localStorage.removeItem('personalViews');
         }}>Reset Personal Views</button>
+        <button onClick={() => setAutoPlay(!autoPlay)}>
+          {autoPlay ? 'Disable Autoplay' : 'Enable Autoplay'}
+        </button>
       </div>
       <div className={`tab-content ${activeTab === 'theme' ? 'active' : ''}`}>
         <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
@@ -205,17 +191,95 @@ function App() {
   return (
     <div className={theme}>
       {!isLoggedIn ? (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '20vh' }}>
           <button onClick={handleLogin}>Log in with Google</button>
           <br /><br />
           <a href="#" onClick={() => alert('Privacy Policy goes here.')}>Privacy Policy</a> |
           <a href="#" onClick={() => alert('Terms and Conditions go here.')}> Terms & Conditions</a>
         </div>
       ) : (
-        <div>
-          <button onClick={() => setShowSettings(!showSettings)}>⚙️ Settings</button>
-          {SettingsDrawer()}
-          {/* Rest of app UI as previously updated */}
+        <div style={{ display: 'flex' }}>
+          <aside style={{ width: showSidebar ? '250px' : '40px', position: 'sticky', top: '1rem', height: '100vh', overflowY: 'auto' }}>
+            <button onClick={() => setShowSidebar(!showSidebar)}>{showSidebar ? '◀️' : '▶️'}</button>
+            {showSidebar && (
+              <div>
+                <h3>Options</h3>
+                <button onClick={() => sortPlaylistVideos('title')}>Sort by Title</button>
+                <button onClick={() => sortPlaylistVideos('views')}>Sort by Personal Views</button>
+                <button onClick={() => sortPlaylistVideos('dateAdded')}>Sort by Date Added</button>
+                <button onClick={() => sortPlaylistVideos('datePublished')}>Sort by Date Published</button>
+                <p>Order: {sortDirection === 'asc' ? 'Ascending' : 'Descending'}</p>
+                <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
+              </div>
+            )}
+          </aside>
+          <main style={{ flexGrow: 1, padding: '1rem' }}>
+            {SettingsDrawer()}
+            {selectedPlaylist ? (
+              <div>
+                <h2>{selectedPlaylist.snippet.title}</h2>
+                {currentVideoId && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <YouTube
+                      videoId={currentVideoId}
+                      opts={{
+                        width: '100%',
+                        playerVars: {
+                          autoplay: 1,
+                          controls: 1,
+                          volume: volume
+                        }
+                      }}
+                      onEnd={handleVideoEnd}
+                      onReady={e => {
+                        playerRef.current = e.target;
+                        e.target.setVolume(volume);
+                      }}
+                    />
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <button onClick={() => skipVideo(-1)}>⏮ Prev</button>
+                      <button onClick={() => skipVideo(1)}>⏭ Next</button>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={volume}
+                        onChange={(e) => {
+                          setVolume(Number(e.target.value));
+                          if (playerRef.current) playerRef.current.setVolume(Number(e.target.value));
+                        }}
+                      />
+                      Volume: {volume}%
+                    </div>
+                  </div>
+                )}
+                <ul>
+                  {playlistVideos.map((video, index) => (
+                    <li key={video.snippet.resourceId?.videoId || index} style={{ marginBottom: '1rem' }}>
+                      <span>{index + 1}. </span>
+                      <img src={video.snippet.thumbnails?.default?.url} alt="thumb" style={{ verticalAlign: 'middle' }} />
+                      <strong>{video.snippet.title}</strong>
+                    </li>
+                  ))}
+                </ul>
+                <div ref={loader} style={{ height: '20px' }} />
+                <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>⬆ Back to Top</button>
+              </div>
+            ) : (
+              <div>
+                <h2>Your Playlists</h2>
+                <ul>
+                  {playlists.map((pl) => (
+                    <li key={pl.id} style={{ cursor: 'pointer', marginBottom: '1rem' }} onClick={() => fetchPlaylistVideos(pl)}>
+                      <img src={pl.snippet.thumbnails?.default?.url || pl.snippet.thumbnails?.medium?.url || ''} alt="thumbnail" />
+                      <br />
+                      <strong>{pl.snippet.title}</strong>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </main>
         </div>
       )}
     </div>
