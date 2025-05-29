@@ -39,3 +39,18 @@ body.dark {
   padding: 0.5em 1em;
   border-radius: 5px;
 }
+
+body.low-power {
+  background-color: #000 !important;
+  color: #999 !important;
+  filter: brightness(85%);
+}
+
+body.low-power * {
+  animation: none !important;
+  transition: none !important;
+}
+
+body.low-power img {
+  opacity: 0.6;
+}

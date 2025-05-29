@@ -17,17 +17,13 @@ function App() {
   const [theme, setTheme] = useState('light');
   const [sortDirection, setSortDirection] = useState('desc');
   const [sortType, setSortType] = useState('');
-  const [showSidebar, setShowSidebar] = useState(() => {
-    const saved = localStorage.getItem('showSidebar');
-    if (saved !== null) return saved === 'true';
-    return window.innerWidth >= 768;
-  });
   const [autoPlay, setAutoPlay] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [currentVideoId, setCurrentVideoId] = useState(null);
   const [volume, setVolume] = useState(50);
   const [isPremium, setIsPremium] = useState(true);
   const [backgroundPlayback, setBackgroundPlayback] = useState(() => localStorage.getItem('backgroundPlayback') === 'true');
+  const [lowPowerMode, setLowPowerMode] = useState(() => localStorage.getItem('lowPowerMode') === 'true');
 
   const playerRef = useRef(null);
 
@@ -40,9 +36,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.body.className = theme;
+    document.body.className = `${theme}${lowPowerMode ? ' low-power' : ''}`;
     localStorage.setItem('theme', theme);
-  }, [theme]);
+    localStorage.setItem('lowPowerMode', lowPowerMode);
+  }, [theme, lowPowerMode]);
 
   useEffect(() => {
     localStorage.setItem('personalViews', JSON.stringify(personalViews));
@@ -91,16 +88,17 @@ function App() {
     } else {
       setSelectedPlaylist(playlist);
       setAllPlaylistVideos(combined);
-      const finalSorted = sortVideos(combined, sortType, sortDirection);
-      setPlaylistVideos(finalSorted);
       setCurrentIndex(0);
-      setCurrentVideoId(finalSorted[0]?.snippet.resourceId?.videoId || null);
+      const sorted = sortVideos(combined, sortType, sortDirection);
+      setPlaylistVideos(sorted);
+      setCurrentVideoId(sorted[0]?.snippet.resourceId?.videoId);
     }
   };
 
   const sortVideos = (videos, type, direction) => {
     const factor = direction === 'asc' ? 1 : -1;
     const sorted = [...videos];
+
     if (type === 'title') {
       sorted.sort((a, b) => a.snippet.title.localeCompare(b.snippet.title) * factor);
     } else if (type === 'views') {
@@ -114,15 +112,8 @@ function App() {
     } else if (type === 'datePublished') {
       sorted.sort((a, b) => (new Date(a.snippet.publishedAt || 0) - new Date(b.snippet.publishedAt || 0)) * factor);
     }
-    return sorted;
-  };
 
-  const sortPlaylistVideos = (type) => {
-    const newDirection = sortType === type ? (sortDirection === 'asc' ? 'desc' : 'asc') : sortDirection;
-    setSortDirection(newDirection);
-    setSortType(type);
-    const sorted = sortVideos(allPlaylistVideos, type, newDirection);
-    setPlaylistVideos(sorted);
+    return sorted;
   };
 
   const handleVideoEnd = () => {
@@ -132,23 +123,6 @@ function App() {
       setCurrentIndex(nextIndex);
       setCurrentVideoId(playlistVideos[nextIndex].snippet.resourceId?.videoId);
     }
-  };
-
-  const skipVideo = (direction) => {
-    if (currentIndex == null) return;
-    const nextIndex = currentIndex + direction;
-    if (nextIndex >= 0 && nextIndex < playlistVideos.length) {
-      setCurrentIndex(nextIndex);
-      setCurrentVideoId(playlistVideos[nextIndex].snippet.resourceId?.videoId);
-    }
-  };
-
-  const handleVideoPlay = () => {
-    const vidId = currentVideoId;
-    setPersonalViews((prev) => ({
-      ...prev,
-      [vidId]: (prev[vidId] || 0) + 1
-    }));
   };
 
   const SettingsDrawer = () => (
@@ -180,6 +154,9 @@ function App() {
                   {backgroundPlayback ? 'Disable Background Playback' : 'Enable Background Playback'}
                 </button>
               )}
+              <button onClick={() => setLowPowerMode(!lowPowerMode)}>
+                {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
+              </button>
             </div>
             <div className={`tab-content ${activeTab === 'theme' ? 'active' : ''}`}>
               <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
@@ -204,16 +181,25 @@ function App() {
   );
 
   return (
-    <div className={`app-container ${theme}`}>
-      {isLoggedIn ? (
-        <>
-          <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
-          {SettingsDrawer()}
+    <div className={theme}>
+      <button onClick={() => setShowSettings(true)}>Settings</button>
+      {SettingsDrawer()}
+      {!isLoggedIn ? (
+        <button onClick={() => {
+          const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
+          const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
+          const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
+          const RESPONSE_TYPE = 'token';
+          const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&response_type=${RESPONSE_TYPE}&include_granted_scopes=true`;
+          window.location.href = authUrl;
+        }}>Log in with Google</button>
+      ) : (
+        <div>
           {!selectedPlaylist ? (
             <ul>
               {playlists.map((pl) => (
-                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer', marginBottom: '1rem' }}>
-                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
+                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer' }}>
+                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" />
                   <strong>{pl.snippet.title}</strong>
                 </li>
               ))}
@@ -228,38 +214,23 @@ function App() {
                 setCurrentVideoId(null);
               }}>← Back to Playlists</button>
               <h2>{selectedPlaylist.snippet.title}</h2>
-              <YouTube
-                videoId={currentVideoId}
-                opts={{ playerVars: { autoplay: 1 } }}
-                onEnd={handleVideoEnd}
-                onPlay={handleVideoPlay}
-                onReady={(event) => {
-                  playerRef.current = event.target;
-                  playerRef.current.setVolume(volume);
-                }}
-              />
-              <div>
-                <button onClick={() => skipVideo(-1)}>Previous</button>
-                <button onClick={() => skipVideo(1)}>Next</button>
-                <input type="range" min="0" max="100" value={volume} onChange={(e) => {
-                  const vol = parseInt(e.target.value);
-                  setVolume(vol);
-                  if (playerRef.current) playerRef.current.setVolume(vol);
-                }} />
-              </div>
-              <div>
-                <button onClick={() => sortPlaylistVideos('title')}>Sort by Title</button>
-                <button onClick={() => sortPlaylistVideos('views')}>Sort by Personal Views</button>
-                <button onClick={() => sortPlaylistVideos('dateAdded')}>Sort by Date Added</button>
-                <button onClick={() => sortPlaylistVideos('datePublished')}>Sort by Date Published</button>
-                <span>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</span>
-              </div>
+              {currentVideoId && (
+                <YouTube
+                  videoId={currentVideoId}
+                  opts={{ playerVars: { autoplay: 1 } }}
+                  onEnd={handleVideoEnd}
+                  onReady={(event) => {
+                    playerRef.current = event.target;
+                    playerRef.current.setVolume(volume);
+                  }}
+                />
+              )}
               <ul>
                 {playlistVideos.map((video, index) => (
                   index >= currentIndex && (
                     <li key={video.snippet.resourceId?.videoId || index}>
-                      <span style={{ marginRight: '8px' }}>{index + 1}.</span>
-                      <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
+                      <span>{index + 1}.</span>
+                      <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" />
                       <strong>{video.snippet.title}</strong>
                       <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
                     </li>
@@ -268,16 +239,9 @@ function App() {
               </ul>
             </div>
           )}
-        </>
-      ) : (
-        <div style={{ textAlign: 'center', marginTop: '100px' }}>
-          <button onClick={() => {
-            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com&redirect_uri=https://youtube-playlist-sorter.vercel.app&scope=https://www.googleapis.com/auth/youtube.readonly&response_type=token&include_granted_scopes=true`;
-            window.location.href = authUrl;
-          }}>Log in with Google</button>
-          <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
         </div>
       )}
+      <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
     </div>
   );
 }
