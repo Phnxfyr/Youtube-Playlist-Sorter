@@ -190,7 +190,49 @@ function App() {
           </div>
         </div>
       )}
-      {/* ...rest of JSX remains unchanged */}
+      <main style={{ flexGrow: 1 }}>
+        <header>
+          <h1>YouTube Playlist Sorter</h1>
+          <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
+        </header>
+        {!isLoggedIn ? (
+          <button onClick={handleLogin}>Log in with Google</button>
+        ) : !selectedPlaylist ? (
+          <ul>
+            {playlists.map((pl) => (
+              <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)}>
+                <img src={pl.snippet.thumbnails?.default?.url || pl.snippet.thumbnails?.medium?.url} alt="thumb" />
+                <br />
+                <strong>{pl.snippet.title}</strong>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div>
+            <h2>{selectedPlaylist.snippet.title}</h2>
+            <div>
+              <button onClick={() => sortPlaylistVideos('title')}>Sort by Title</button>
+              <button onClick={() => sortPlaylistVideos('views')}>Sort by Views</button>
+              <button onClick={() => sortPlaylistVideos('dateAdded')}>Sort by Date Added</button>
+              <button onClick={() => sortPlaylistVideos('datePublished')}>Sort by Date Published</button>
+              <p>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</p>
+            </div>
+            <ul>
+              {playlistVideos.map((video, idx) => (
+                <li key={video.snippet.resourceId?.videoId || idx}>
+                  <span>{idx + 1}. </span>
+                  <img src={video.snippet.thumbnails.default.url} alt="thumb" />
+                  <br />
+                  <strong>{video.snippet.title}</strong>
+                  <br />
+                  Personal Views: {personalViews[video.snippet.resourceId?.videoId] || 0}
+                </li>
+              ))}
+            </ul>
+            <div ref={loader} style={{ height: '20px' }} />
+          </div>
+        )}
+      </main>
     </div>
   );
 }
