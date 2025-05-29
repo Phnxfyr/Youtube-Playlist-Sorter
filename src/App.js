@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import YouTube from 'react-youtube';
 import './App.css';
+import './theme.css';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -25,6 +26,8 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState(null);
   const [currentVideoId, setCurrentVideoId] = useState(null);
   const [volume, setVolume] = useState(50);
+  const [isPremium, setIsPremium] = useState(true);
+  const [backgroundPlayback, setBackgroundPlayback] = useState(() => localStorage.getItem('backgroundPlayback') === 'true');
 
   const playerRef = useRef(null);
 
@@ -140,125 +143,139 @@ function App() {
     }
   };
 
-  return (
-    <div className={`app-container ${theme}`}>
-      {!isLoggedIn ? (
-        <div className="login-screen">
-          <h1>YouTube Playlist Sorter</h1>
-          <button onClick={() => {
-            const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
-            const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
-            const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
-            const RESPONSE_TYPE = 'token';
-            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&response_type=${RESPONSE_TYPE}&include_granted_scopes=true`;
-            window.location.href = authUrl;
-          }}>Log in with Google</button>
-          <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
-        </div>
-      ) : selectedPlaylist ? (
-        <div className="main-content">
-          {showSidebar && (
-            <aside className="sidebar">
-              <button onClick={() => sortPlaylistVideos('title')}>Sort by Title</button>
-              <button onClick={() => sortPlaylistVideos('views')}>Sort by Personal Views</button>
-              <button onClick={() => sortPlaylistVideos('dateAdded')}>Sort by Date Added</button>
-              <button onClick={() => sortPlaylistVideos('datePublished')}>Sort by Date Published</button>
-              <div>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</div>
-              <button onClick={() => {
-                setSelectedPlaylist(null);
-                setPlaylistVideos([]);
-              }}>🔙 Back to Playlists</button>
-              <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
-            </aside>
-          )}
+  const handleVideoPlay = () => {
+    const vidId = currentVideoId;
+    setPersonalViews((prev) => ({
+      ...prev,
+      [vidId]: (prev[vidId] || 0) + 1
+    }));
+  };
 
-          <div className="video-view">
-            {currentVideoId && (
-              <YouTube
-                videoId={currentVideoId}
-                opts={{ playerVars: { autoplay: 1, mute: 0 } }}
-                onReady={(e) => {
-                  playerRef.current = e.target;
-                  e.target.setVolume(volume);
-                }}
-                onEnd={handleVideoEnd}
-              />
-            )}
-            <div className="controls">
-              <button onClick={() => skipVideo(-1)}>⏮ Prev</button>
-              <button onClick={() => skipVideo(1)}>⏭ Next</button>
-              <label>
-                Volume
-                <input type="range" min="0" max="100" value={volume} onChange={(e) => {
-                  setVolume(e.target.value);
-                  playerRef.current?.setVolume(e.target.value);
-                }} />
-              </label>
-              <label>
-                <input type="checkbox" checked={autoPlay} onChange={(e) => setAutoPlay(e.target.checked)} /> Auto Play
-              </label>
-            </div>
-            <ul className="video-list">
-              {playlistVideos.map((video, i) => (
-                <li key={video.snippet.resourceId.videoId}>
-                  <span>{i + 1}.</span>
-                  <img src={video.snippet.thumbnails.default.url} alt="thumb" />
-                  <strong>{video.snippet.title}</strong>
-                  <div>Views: {personalViews[video.snippet.resourceId.videoId] || 0}</div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : (
-        <ul className="playlist-list">
-          {playlists.map((pl) => (
-            <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)}>
-              <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumb" />
-              <strong>{pl.snippet.title}</strong>
-            </li>
-          ))}
-        </ul>
-      )}
-
+  const SettingsDrawer = () => (
+    <>
       {showSettings && (
-        <div className="settings-modal" onClick={() => setShowSettings(false)}>
-          <div className="settings-content" onClick={(e) => e.stopPropagation()}>
+        <>
+          <div className="drawer-overlay" onClick={() => setShowSettings(false)} />
+          <div className={`settings-drawer open`}>
             <h2>Settings</h2>
             <div className="tab-buttons">
               <button onClick={() => setActiveTab('general')}>General</button>
               <button onClick={() => setActiveTab('theme')}>Theme</button>
               <button onClick={() => setActiveTab('account')}>Account</button>
             </div>
-            {activeTab === 'general' && (
-              <div>
+            <div className={`tab-content ${activeTab === 'general' ? 'active' : ''}`}>
+              <button onClick={() => {
+                setPersonalViews({});
+                localStorage.removeItem('personalViews');
+              }}>Reset Personal Views</button>
+              <button onClick={() => setAutoPlay(!autoPlay)}>
+                {autoPlay ? 'Disable Autoplay' : 'Enable Autoplay'}
+              </button>
+              {isPremium && (
                 <button onClick={() => {
-                  setPersonalViews({});
-                  localStorage.removeItem('personalViews');
-                }}>🔄 Reset Personal Views</button>
-              </div>
-            )}
-            {activeTab === 'theme' && (
-              <div>
-                <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-                  {theme === 'light' ? '🌙 Enable Dark Mode' : '☀️ Enable Light Mode'}
+                  const next = !backgroundPlayback;
+                  setBackgroundPlayback(next);
+                  localStorage.setItem('backgroundPlayback', next.toString());
+                }}>
+                  {backgroundPlayback ? 'Disable Background Playback' : 'Enable Background Playback'}
                 </button>
-              </div>
-            )}
-            {activeTab === 'account' && (
-              <div>
-                <button onClick={() => {
-                  setToken('');
-                  setIsLoggedIn(false);
-                  setPlaylists([]);
-                  setSelectedPlaylist(null);
-                  setPlaylistVideos([]);
-                  window.location.hash = '';
-                  setShowSettings(false);
-                }}>🚪 Logout / Switch User</button>
-              </div>
-            )}
+              )}
+            </div>
+            <div className={`tab-content ${activeTab === 'theme' ? 'active' : ''}`}>
+              <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+                {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
+              </button>
+            </div>
+            <div className={`tab-content ${activeTab === 'account' ? 'active' : ''}`}>
+              <button onClick={() => {
+                setToken('');
+                setIsLoggedIn(false);
+                setPlaylists([]);
+                setSelectedPlaylist(null);
+                setPlaylistVideos([]);
+                window.location.hash = '';
+                setShowSettings(false);
+              }}>Logout / Switch User</button>
+            </div>
           </div>
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <div className={`app-container ${theme}`}>
+      {isLoggedIn ? (
+        <>
+          <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
+          {SettingsDrawer()}
+          {!selectedPlaylist ? (
+            <ul>
+              {playlists.map((pl) => (
+                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer', marginBottom: '1rem' }}>
+                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
+                  <strong>{pl.snippet.title}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>
+              <button onClick={() => {
+                setSelectedPlaylist(null);
+                setPlaylistVideos([]);
+                setAllPlaylistVideos([]);
+                setCurrentIndex(null);
+                setCurrentVideoId(null);
+              }}>← Back to Playlists</button>
+              <h2>{selectedPlaylist.snippet.title}</h2>
+              <YouTube
+                videoId={currentVideoId}
+                opts={{ playerVars: { autoplay: 1 } }}
+                onEnd={handleVideoEnd}
+                onPlay={handleVideoPlay}
+                onReady={(event) => {
+                  playerRef.current = event.target;
+                  playerRef.current.setVolume(volume);
+                }}
+              />
+              <div>
+                <button onClick={() => skipVideo(-1)}>Previous</button>
+                <button onClick={() => skipVideo(1)}>Next</button>
+                <input type="range" min="0" max="100" value={volume} onChange={(e) => {
+                  const vol = parseInt(e.target.value);
+                  setVolume(vol);
+                  if (playerRef.current) playerRef.current.setVolume(vol);
+                }} />
+              </div>
+              <div>
+                <button onClick={() => sortPlaylistVideos('title')}>Sort by Title</button>
+                <button onClick={() => sortPlaylistVideos('views')}>Sort by Personal Views</button>
+                <button onClick={() => sortPlaylistVideos('dateAdded')}>Sort by Date Added</button>
+                <button onClick={() => sortPlaylistVideos('datePublished')}>Sort by Date Published</button>
+                <span>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</span>
+              </div>
+              <ul>
+                {playlistVideos.map((video, index) => (
+                  index >= currentIndex && (
+                    <li key={video.snippet.resourceId?.videoId || index}>
+                      <span style={{ marginRight: '8px' }}>{index + 1}.</span>
+                      <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
+                      <strong>{video.snippet.title}</strong>
+                      <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
+                    </li>
+                  )
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ textAlign: 'center', marginTop: '100px' }}>
+          <button onClick={() => {
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com&redirect_uri=https://youtube-playlist-sorter.vercel.app&scope=https://www.googleapis.com/auth/youtube.readonly&response_type=token&include_granted_scopes=true`;
+            window.location.href = authUrl;
+          }}>Log in with Google</button>
+          <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
         </div>
       )}
     </div>
