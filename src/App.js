@@ -128,6 +128,14 @@ function App() {
 
   const handleVideoEnd = () => {
     if (!autoPlay || currentIndex == null) return;
+    const currentVideo = playlistVideos[currentIndex];
+    const videoId = currentVideo.snippet.resourceId?.videoId;
+    setPersonalViews((prev) => {
+      const updated = { ...prev, [videoId]: (prev[videoId] || 0) + 1 };
+      localStorage.setItem('personalViews', JSON.stringify(updated));
+      return updated;
+    });
+
     const nextIndex = currentIndex + 1;
     if (nextIndex < playlistVideos.length) {
       setCurrentIndex(nextIndex);
@@ -135,154 +143,111 @@ function App() {
     }
   };
 
-  const SettingsDrawer = () => (
-    <>
-      {showSettings && isLoggedIn && (
-        <>
-          <div className="drawer-overlay" onClick={() => setShowSettings(false)} />
-          <div className="settings-drawer open" style={{ top: '150px', right: '40px', position: 'fixed', transform: 'translateY(-50%)' }}>
-            <h2>Settings</h2>
-            <div className="tab-buttons">
-              <button onClick={() => setActiveTab('general')}>General</button>
-              <button onClick={() => setActiveTab('theme')}>Theme</button>
-              <button onClick={() => setActiveTab('account')}>Account</button>
-            </div>
-            <div className={`tab-content ${activeTab === 'general' ? 'active' : ''}`}>
-              <button onClick={() => {
-                setPersonalViews({});
-                localStorage.removeItem('personalViews');
-              }}>Reset Personal Views</button>
-              <button onClick={() => setAutoPlay(!autoPlay)}>
-                {autoPlay ? 'Disable Autoplay' : 'Enable Autoplay'}
-              </button>
-              {isPremium && (
-                <button onClick={() => {
-                  const next = !backgroundPlayback;
-                  setBackgroundPlayback(next);
-                  localStorage.setItem('backgroundPlayback', next.toString());
-                }}>
-                  {backgroundPlayback ? 'Disable Background Playback' : 'Enable Background Playback'}
-                </button>
-              )}
-              <button onClick={() => setLowPowerMode(!lowPowerMode)}>
-                {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
-              </button>
-            </div>
-            <div className={`tab-content ${activeTab === 'theme' ? 'active' : ''}`}>
-              <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-                {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
-              </button>
-            </div>
-            <div className={`tab-content ${activeTab === 'account' ? 'active' : ''}`}>
-              <button onClick={() => {
-                setToken('');
-                setIsLoggedIn(false);
-                setPlaylists([]);
-                setSelectedPlaylist(null);
-                setPlaylistVideos([]);
-                window.location.hash = '';
-                setShowSettings(false);
-              }}>Logout / Switch User</button>
-            </div>
-          </div>
-        </>
-      )}
-    </>
-  );
+  const handleVideoClick = (index) => {
+    setCurrentIndex(index);
+    setCurrentVideoId(playlistVideos[index].snippet.resourceId?.videoId);
+  };
 
   return (
     <div className={theme} style={{ display: 'flex' }}>
-      {isLoggedIn && <button onClick={() => setShowSettings(true)} style={{ position: 'fixed', top: 30, right: 30, zIndex: 1000 }}>Settings</button>}
-      {SettingsDrawer()}
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ flex: 1, textAlign: 'center' }}>
         {!isLoggedIn ? (
-          <div style={{ textAlign: 'center' }}>
+          <div style={{ marginTop: '20vh' }}>
             <button onClick={handleLogin}>Log in with Google</button>
             <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
           </div>
-        ) : !selectedPlaylist ? (
-          <ul>
-            {playlists.map((pl) => (
-              <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer', marginBottom: '1rem' }}>
-                <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
-                <strong>{pl.snippet.title}</strong>
-              </li>
-            ))}
-          </ul>
         ) : (
-          <div>
-            <button onClick={() => {
-              setSelectedPlaylist(null);
-              setPlaylistVideos([]);
-              setAllPlaylistVideos([]);
-              setCurrentIndex(null);
-              setCurrentVideoId(null);
-            }}>← Back to Playlists</button>
-            <h2>{selectedPlaylist.snippet.title}</h2>
-            <YouTube
-              videoId={currentVideoId}
-              opts={{ playerVars: { autoplay: 1 } }}
-              onEnd={handleVideoEnd}
-              onReady={(event) => {
-                playerRef.current = event.target;
-                playerRef.current.setVolume(volume);
-              }}
-            />
-            <div>
-              <button onClick={() => setCurrentIndex((prev) => Math.max(prev - 1, 0))}>Previous</button>
-              <button onClick={() => setCurrentIndex((prev) => Math.min(prev + 1, playlistVideos.length - 1))}>Next</button>
-              <input type="range" min="0" max="100" value={volume} onChange={(e) => {
-                const vol = parseInt(e.target.value);
-                setVolume(vol);
-                if (playerRef.current) playerRef.current.setVolume(vol);
-              }} />
-            </div>
-            <div>
-              <button onClick={() => {
-                const newType = 'title';
-                const newDir = sortType === newType && sortDirection === 'asc' ? 'desc' : 'asc';
-                setSortType(newType);
-                setSortDirection(newDir);
-                setPlaylistVideos(sortVideos(allPlaylistVideos, newType, newDir));
-              }}>Sort by Title</button>
-              <button onClick={() => {
-                const newType = 'views';
-                const newDir = sortType === newType && sortDirection === 'asc' ? 'desc' : 'asc';
-                setSortType(newType);
-                setSortDirection(newDir);
-                setPlaylistVideos(sortVideos(allPlaylistVideos, newType, newDir));
-              }}>Sort by Personal Views</button>
-              <button onClick={() => {
-                const newType = 'dateAdded';
-                const newDir = sortType === newType && sortDirection === 'asc' ? 'desc' : 'asc';
-                setSortType(newType);
-                setSortDirection(newDir);
-                setPlaylistVideos(sortVideos(allPlaylistVideos, newType, newDir));
-              }}>Sort by Date Added</button>
-              <button onClick={() => {
-                const newType = 'datePublished';
-                const newDir = sortType === newType && sortDirection === 'asc' ? 'desc' : 'asc';
-                setSortType(newType);
-                setSortDirection(newDir);
-                setPlaylistVideos(sortVideos(allPlaylistVideos, newType, newDir));
-              }}>Sort by Date Published</button>
-              <span>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</span>
-            </div>
-            <ul>
-              {playlistVideos.map((video, index) => (
-                index >= currentIndex && (
-                  <li key={video.snippet.resourceId?.videoId || index}>
-                    <span style={{ marginRight: '8px' }}>{index + 1}.</span>
-                    <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
-                    <strong>{video.snippet.title}</strong>
-                    <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
+          <>
+            {!selectedPlaylist ? (
+              <ul style={{ marginTop: '10vh' }}>
+                {playlists.map((pl) => (
+                  <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer', marginBottom: '1rem' }}>
+                    <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
+                    <strong>{pl.snippet.title}</strong>
                   </li>
-                )
-              ))}
-            </ul>
-          </div>
+                ))}
+              </ul>
+            ) : (
+              <div>
+                <button onClick={() => {
+                  setSelectedPlaylist(null);
+                  setPlaylistVideos([]);
+                  setAllPlaylistVideos([]);
+                  setCurrentIndex(null);
+                  setCurrentVideoId(null);
+                }}>← Back to Playlists</button>
+                <h2>{selectedPlaylist.snippet.title}</h2>
+                <YouTube
+                  videoId={currentVideoId}
+                  opts={{ playerVars: { autoplay: 1 } }}
+                  onEnd={handleVideoEnd}
+                  onReady={(event) => {
+                    playerRef.current = event.target;
+                    playerRef.current.setVolume(volume);
+                  }}
+                />
+                <div>
+                  <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
+                  <button onClick={() => handleVideoClick(currentIndex + 1)}>Next</button>
+                  <input type="range" min="0" max="100" value={volume} onChange={(e) => {
+                    const vol = parseInt(e.target.value);
+                    setVolume(vol);
+                    if (playerRef.current) playerRef.current.setVolume(vol);
+                  }} />
+                </div>
+                <ul>
+                  {playlistVideos.map((video, index) => (
+                    <li
+                      key={video.snippet.resourceId?.videoId || index}
+                      onClick={() => handleVideoClick(index)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <span style={{ marginRight: '8px' }}>{index + 1}.</span>
+                      <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
+                      <strong>{video.snippet.title}</strong>
+                      <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
       </div>
+      {isLoggedIn && (
+        <div style={{ width: '300px', padding: '20px', position: 'relative', top: '5vh' }}>
+          <button onClick={() => setShowSettings(!showSettings)}>⚙️ Settings</button>
+          {showSettings && (
+            <div className="settings">
+              <div className="tab-buttons">
+                <button onClick={() => setActiveTab('general')}>General</button>
+                <button onClick={() => setActiveTab('theme')}>Theme</button>
+              </div>
+              {activeTab === 'general' && (
+                <>
+                  <button onClick={() => setAutoPlay(!autoPlay)}>
+                    {autoPlay ? 'Disable Autoplay' : 'Enable Autoplay'}
+                  </button>
+                  <button onClick={() => {
+                    setPersonalViews({});
+                    localStorage.removeItem('personalViews');
+                  }}>Reset Personal Views</button>
+                </>
+              )}
+              {activeTab === 'theme' && (
+                <>
+                  <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+                    {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
+                  </button>
+                  <button onClick={() => setLowPowerMode(!lowPowerMode)}>
+                    {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
