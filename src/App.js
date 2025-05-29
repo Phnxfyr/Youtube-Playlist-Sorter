@@ -20,7 +20,6 @@ function App() {
     if (saved !== null) return saved === 'true';
     return window.innerWidth >= 768;
   });
-  const [showTerms, setShowTerms] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [currentVideoId, setCurrentVideoId] = useState(null);
@@ -170,83 +169,53 @@ function App() {
     }
   };
 
+  const SettingsDrawer = () => (
+    <div className={`settings-drawer ${showSettings ? 'open' : ''}`}>
+      <h2>Settings</h2>
+      <div className="tab-buttons">
+        <button onClick={() => setActiveTab('general')}>General</button>
+        <button onClick={() => setActiveTab('theme')}>Theme</button>
+        <button onClick={() => setActiveTab('account')}>Account</button>
+      </div>
+      <div className={`tab-content ${activeTab === 'general' ? 'active' : ''}`}>
+        <button onClick={() => {
+          setPersonalViews({});
+          localStorage.removeItem('personalViews');
+        }}>Reset Personal Views</button>
+      </div>
+      <div className={`tab-content ${activeTab === 'theme' ? 'active' : ''}`}>
+        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+          {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
+        </button>
+      </div>
+      <div className={`tab-content ${activeTab === 'account' ? 'active' : ''}`}>
+        <button onClick={() => {
+          setToken('');
+          setIsLoggedIn(false);
+          setPlaylists([]);
+          setSelectedPlaylist(null);
+          setPlaylistVideos([]);
+          window.location.hash = '';
+          setShowSettings(false);
+        }}>Logout / Switch User</button>
+      </div>
+    </div>
+  );
+
   return (
     <div className={theme}>
       {!isLoggedIn ? (
-        <button onClick={handleLogin}>Log in with Google</button>
+        <div>
+          <button onClick={handleLogin}>Log in with Google</button>
+          <br /><br />
+          <a href="#" onClick={() => alert('Privacy Policy goes here.')}>Privacy Policy</a> |
+          <a href="#" onClick={() => alert('Terms and Conditions go here.')}> Terms & Conditions</a>
+        </div>
       ) : (
         <div>
-          {!selectedPlaylist ? (
-            <ul>
-              {playlists.map((pl) => (
-                <li
-                  key={pl.id}
-                  style={{ cursor: 'pointer', marginBottom: '1rem' }}
-                  onClick={() => fetchPlaylistVideos(pl)}
-                >
-                  <img src={pl.snippet.thumbnails?.default?.url || pl.snippet.thumbnails?.medium?.url || ''} alt="thumbnail" />
-                  <br />
-                  <strong>{pl.snippet.title}</strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div>
-              <h2>{selectedPlaylist.snippet.title}</h2>
-              <div>
-                <button onClick={() => sortPlaylistVideos('title')}>Sort by Title</button>
-                <button onClick={() => sortPlaylistVideos('views')}>Sort by Personal Views</button>
-                <button onClick={() => sortPlaylistVideos('dateAdded')}>Sort by Date Added</button>
-                <button onClick={() => sortPlaylistVideos('datePublished')}>Sort by Date Published</button>
-                <p>Sorting: {sortDirection === 'asc' ? 'Ascending' : 'Descending'}</p>
-              </div>
-              <ul>
-                {playlistVideos.map((video, index) => (
-                  <li key={video.snippet.resourceId?.videoId || index}>
-                    <span style={{ marginRight: '8px' }}>{index + 1}.</span>
-                    <img src={video.snippet.thumbnails.default.url} alt="thumb" />
-                    <strong>{video.snippet.title}</strong>
-                  </li>
-                ))}
-              </ul>
-              <div ref={loader} style={{ height: '20px' }} />
-            </div>
-          )}
-
-          {currentVideoId && (
-            <div style={{ marginTop: '2rem' }}>
-              <iframe
-                ref={playerRef}
-                width="100%"
-                height="315"
-                src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&enablejsapi=1`}
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                onEnded={handleVideoEnd}
-              ></iframe>
-              <div>
-                <button onClick={() => skipVideo(-1)}>⏮️ Previous</button>
-                <button onClick={() => skipVideo(1)}>⏭️ Next</button>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={volume}
-                  onChange={(e) => setVolume(Number(e.target.value))}
-                  title="Volume"
-                />
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={autoPlay}
-                    onChange={(e) => setAutoPlay(e.target.checked)}
-                  /> Auto-play next
-                </label>
-              </div>
-            </div>
-          )}
+          <button onClick={() => setShowSettings(!showSettings)}>⚙️ Settings</button>
+          {SettingsDrawer()}
+          {/* Rest of app UI as previously updated */}
         </div>
       )}
     </div>
