@@ -160,6 +160,7 @@ function App() {
               <button onClick={() => sortPlaylistVideos('dateAdded')}>Date Added</button>
               <button onClick={() => sortPlaylistVideos('datePublished')}>Date Published</button>
               <p>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</p>
+              <button onClick={() => setShowSettings(true)}>⚙️ Settings</button>
               <button onClick={() => setShowTerms(true)}>📄 Terms & Privacy</button>
             </div>
           )}
@@ -215,6 +216,53 @@ function App() {
               ))}
             </ul>
             <div ref={loader} style={{ height: '20px' }} />
+          </div>
+        )}
+
+        {showSettings && (
+          <div style={{ position: 'fixed', top: 0, right: 0, width: '300px', height: '100%', backgroundColor: '#fff', boxShadow: '-2px 0 5px rgba(0,0,0,0.3)', padding: '1rem', zIndex: 1000 }}>
+            <h2>Settings</h2>
+            <div>
+              <button onClick={() => setActiveTab('general')}>General</button>
+              <button onClick={() => setActiveTab('theme')}>Theme</button>
+              <button onClick={() => setActiveTab('account')}>Account</button>
+              <button onClick={() => setShowSettings(false)}>Close</button>
+            </div>
+
+            {activeTab === 'general' && (
+              <div>
+                <button onClick={() => {
+                  setPersonalViews({});
+                  localStorage.removeItem('personalViews');
+                }}>🔄 Reset Personal Views</button>
+              </div>
+            )}
+
+            {activeTab === 'theme' && (
+              <div>
+                <button onClick={() => {
+                  const newTheme = theme === 'light' ? 'dark' : 'light';
+                  setTheme(newTheme);
+                  localStorage.setItem('theme', newTheme);
+                }}>
+                  {theme === 'light' ? '🌙 Enable Dark Mode' : '☀️ Enable Light Mode'}
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'account' && (
+              <div>
+                <button onClick={() => {
+                  setToken('');
+                  setIsLoggedIn(false);
+                  setPlaylists([]);
+                  setSelectedPlaylist(null);
+                  setPlaylistVideos([]);
+                  window.location.hash = '';
+                  setShowSettings(false);
+                }}>🚪 Logout / Switch User</button>
+              </div>
+            )}
           </div>
         )}
 
