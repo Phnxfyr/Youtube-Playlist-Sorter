@@ -48,6 +48,10 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
+    localStorage.setItem('personalViews', JSON.stringify(personalViews));
+  }, [personalViews]);
+
+  useEffect(() => {
     const hash = window.location.hash;
     if (hash) {
       const params = new URLSearchParams(hash.replace('#', '?'));
@@ -212,6 +216,13 @@ function App() {
             </ul>
           ) : (
             <div>
+              <button onClick={() => {
+                setSelectedPlaylist(null);
+                setPlaylistVideos([]);
+                setAllPlaylistVideos([]);
+                setCurrentIndex(null);
+                setCurrentVideoId(null);
+              }}>← Back to Playlists</button>
               <h2>{selectedPlaylist.snippet.title}</h2>
               <YouTube
                 videoId={currentVideoId}
