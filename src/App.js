@@ -29,8 +29,8 @@ function App() {
   const loader = useRef(null);
   const playerRef = useRef(null);
 
-  const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
-  const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
+  const CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
+  const REDIRECT_URI = 'http://localhost:3000';
   const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
   const RESPONSE_TYPE = 'token';
 
@@ -172,38 +172,81 @@ function App() {
 
   return (
     <div className={theme}>
-      {currentVideoId && (
-        <div style={{ marginTop: '2rem' }}>
-          <iframe
-            ref={playerRef}
-            width="100%"
-            height="315"
-            src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&enablejsapi=1`}
-            title="YouTube video player"
-            frameBorder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            onEnded={handleVideoEnd}
-          ></iframe>
-          <div>
-            <button onClick={() => skipVideo(-1)}>⏮️ Previous</button>
-            <button onClick={() => skipVideo(1)}>⏭️ Next</button>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={volume}
-              onChange={(e) => setVolume(Number(e.target.value))}
-              title="Volume"
-            />
-            <label>
-              <input
-                type="checkbox"
-                checked={autoPlay}
-                onChange={(e) => setAutoPlay(e.target.checked)}
-              /> Auto-play next
-            </label>
-          </div>
+      {!isLoggedIn ? (
+        <button onClick={handleLogin}>Log in with Google</button>
+      ) : (
+        <div>
+          {!selectedPlaylist ? (
+            <ul>
+              {playlists.map((pl) => (
+                <li
+                  key={pl.id}
+                  style={{ cursor: 'pointer', marginBottom: '1rem' }}
+                  onClick={() => fetchPlaylistVideos(pl)}
+                >
+                  <img src={pl.snippet.thumbnails?.default?.url || pl.snippet.thumbnails?.medium?.url || ''} alt="thumbnail" />
+                  <br />
+                  <strong>{pl.snippet.title}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>
+              <h2>{selectedPlaylist.snippet.title}</h2>
+              <div>
+                <button onClick={() => sortPlaylistVideos('title')}>Sort by Title</button>
+                <button onClick={() => sortPlaylistVideos('views')}>Sort by Personal Views</button>
+                <button onClick={() => sortPlaylistVideos('dateAdded')}>Sort by Date Added</button>
+                <button onClick={() => sortPlaylistVideos('datePublished')}>Sort by Date Published</button>
+                <p>Sorting: {sortDirection === 'asc' ? 'Ascending' : 'Descending'}</p>
+              </div>
+              <ul>
+                {playlistVideos.map((video, index) => (
+                  <li key={video.snippet.resourceId?.videoId || index}>
+                    <span style={{ marginRight: '8px' }}>{index + 1}.</span>
+                    <img src={video.snippet.thumbnails.default.url} alt="thumb" />
+                    <strong>{video.snippet.title}</strong>
+                  </li>
+                ))}
+              </ul>
+              <div ref={loader} style={{ height: '20px' }} />
+            </div>
+          )}
+
+          {currentVideoId && (
+            <div style={{ marginTop: '2rem' }}>
+              <iframe
+                ref={playerRef}
+                width="100%"
+                height="315"
+                src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&enablejsapi=1`}
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                onEnded={handleVideoEnd}
+              ></iframe>
+              <div>
+                <button onClick={() => skipVideo(-1)}>⏮️ Previous</button>
+                <button onClick={() => skipVideo(1)}>⏭️ Next</button>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={(e) => setVolume(Number(e.target.value))}
+                  title="Volume"
+                />
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={autoPlay}
+                    onChange={(e) => setAutoPlay(e.target.checked)}
+                  /> Auto-play next
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
