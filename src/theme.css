@@ -1,0 +1,41 @@
+/* theme.css */
+
+body.light {
+  background-color: white;
+  color: black;
+}
+
+body.dark {
+  background-color: #121212;
+  color: white;
+}
+
+.app-container.dark button,
+.app-container.dark input {
+  background-color: #333;
+  color: white;
+  border: 1px solid #555;
+}
+
+.app-container.light button,
+.app-container.light input {
+  background-color: #f0f0f0;
+  color: black;
+  border: 1px solid #ccc;
+}
+
+.settings-drawer {
+  background-color: inherit;
+  color: inherit;
+  transition: transform 0.3s ease;
+}
+
+.settings-drawer.open {
+  transform: translateX(0);
+}
+
+.tab-buttons button {
+  margin: 0.5em;
+  padding: 0.5em 1em;
+  border-radius: 5px;
+}
