@@ -137,7 +137,7 @@ function App() {
   };
 
   const sortPlaylistVideos = (type) => {
-    const newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    const newDirection = sortType === type ? (sortDirection === 'asc' ? 'desc' : 'asc') : sortDirection;
     setSortDirection(newDirection);
     setSortType(type);
 
@@ -221,7 +221,7 @@ function App() {
               {playlistVideos.map((video, idx) => (
                 <li key={video.snippet.resourceId?.videoId || idx}>
                   <span>{idx + 1}. </span>
-                  <img src={video.snippet.thumbnails.default.url} alt="thumb" />
+                  <img src={video.snippet.thumbnails?.default?.url} alt="thumb" />
                   <br />
                   <strong>{video.snippet.title}</strong>
                   <br />
