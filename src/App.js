@@ -127,10 +127,10 @@ function App() {
 
   const SettingsDrawer = () => (
     <>
-      {showSettings && (
+      {showSettings && isLoggedIn && (
         <>
           <div className="drawer-overlay" onClick={() => setShowSettings(false)} />
-          <div className={`settings-drawer open`}>
+          <div className={`settings-drawer open`} style={{ top: '60px' }}>
             <h2>Settings</h2>
             <div className="tab-buttons">
               <button onClick={() => setActiveTab('general')}>General</button>
@@ -181,67 +181,69 @@ function App() {
   );
 
   return (
-    <div className={theme}>
-      <button onClick={() => setShowSettings(true)}>Settings</button>
+    <div className={theme} style={{ display: 'flex' }}>
+      {isLoggedIn && <button onClick={() => setShowSettings(true)} style={{ position: 'fixed', top: 60, right: 10, zIndex: 1000 }}>Settings</button>}
       {SettingsDrawer()}
-      {!isLoggedIn ? (
-        <button onClick={() => {
-          const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
-          const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
-          const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
-          const RESPONSE_TYPE = 'token';
-          const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&response_type=${RESPONSE_TYPE}&include_granted_scopes=true`;
-          window.location.href = authUrl;
-        }}>Log in with Google</button>
-      ) : (
-        <div>
-          {!selectedPlaylist ? (
-            <ul>
-              {playlists.map((pl) => (
-                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer' }}>
-                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" />
-                  <strong>{pl.snippet.title}</strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div>
-              <button onClick={() => {
-                setSelectedPlaylist(null);
-                setPlaylistVideos([]);
-                setAllPlaylistVideos([]);
-                setCurrentIndex(null);
-                setCurrentVideoId(null);
-              }}>← Back to Playlists</button>
-              <h2>{selectedPlaylist.snippet.title}</h2>
-              {currentVideoId && (
-                <YouTube
-                  videoId={currentVideoId}
-                  opts={{ playerVars: { autoplay: 1 } }}
-                  onEnd={handleVideoEnd}
-                  onReady={(event) => {
-                    playerRef.current = event.target;
-                    playerRef.current.setVolume(volume);
-                  }}
-                />
-              )}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+        {!isLoggedIn ? (
+          <button onClick={() => {
+            const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
+            const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
+            const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
+            const RESPONSE_TYPE = 'token';
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&response_type=${RESPONSE_TYPE}&include_granted_scopes=true`;
+            window.location.href = authUrl;
+          }}>Log in with Google</button>
+        ) : (
+          <div>
+            {!selectedPlaylist ? (
               <ul>
-                {playlistVideos.map((video, index) => (
-                  index >= currentIndex && (
-                    <li key={video.snippet.resourceId?.videoId || index}>
-                      <span>{index + 1}.</span>
-                      <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" />
-                      <strong>{video.snippet.title}</strong>
-                      <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
-                    </li>
-                  )
+                {playlists.map((pl) => (
+                  <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer' }}>
+                    <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" />
+                    <strong>{pl.snippet.title}</strong>
+                  </li>
                 ))}
               </ul>
-            </div>
-          )}
-        </div>
-      )}
-      <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
+            ) : (
+              <div>
+                <button onClick={() => {
+                  setSelectedPlaylist(null);
+                  setPlaylistVideos([]);
+                  setAllPlaylistVideos([]);
+                  setCurrentIndex(null);
+                  setCurrentVideoId(null);
+                }}>← Back to Playlists</button>
+                <h2>{selectedPlaylist.snippet.title}</h2>
+                {currentVideoId && (
+                  <YouTube
+                    videoId={currentVideoId}
+                    opts={{ playerVars: { autoplay: 1 } }}
+                    onEnd={handleVideoEnd}
+                    onReady={(event) => {
+                      playerRef.current = event.target;
+                      playerRef.current.setVolume(volume);
+                    }}
+                  />
+                )}
+                <ul>
+                  {playlistVideos.map((video, index) => (
+                    index >= currentIndex && (
+                      <li key={video.snippet.resourceId?.videoId || index}>
+                        <span>{index + 1}.</span>
+                        <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" />
+                        <strong>{video.snippet.title}</strong>
+                        <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
+                      </li>
+                    )
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+        <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
+      </div>
     </div>
   );
 }
