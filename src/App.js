@@ -29,8 +29,8 @@ function App() {
   const loader = useRef(null);
   const playerRef = useRef(null);
 
-  const CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
-  const REDIRECT_URI = 'http://localhost:3000';
+  const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
+  const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
   const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
   const RESPONSE_TYPE = 'token';
 
