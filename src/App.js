@@ -24,8 +24,10 @@ function App() {
   const [isPremium, setIsPremium] = useState(true);
   const [backgroundPlayback, setBackgroundPlayback] = useState(() => localStorage.getItem('backgroundPlayback') === 'true');
   const [lowPowerMode, setLowPowerMode] = useState(() => localStorage.getItem('lowPowerMode') === 'true');
+  const [iosPrompted, setIosPrompted] = useState(() => localStorage.getItem('iosAutoplayAcknowledged') === 'true');
 
   const playerRef = useRef(null);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
   const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
@@ -151,6 +153,13 @@ function App() {
     setCurrentVideoId(playlistVideos[index].snippet.resourceId?.videoId);
   };
 
+  const acknowledgeIosAutoplay = () => {
+    localStorage.setItem('iosAutoplayAcknowledged', 'true');
+    setIosPrompted(true);
+    setCurrentIndex(0);
+    setCurrentVideoId(playlistVideos[0]?.snippet.resourceId?.videoId);
+  };
+
   return (
     <div className={theme} style={{ display: 'flex' }}>
       <div style={{ flex: 1, textAlign: 'center' }}>
@@ -180,15 +189,25 @@ function App() {
                   setCurrentVideoId(null);
                 }}>← Back to Playlists</button>
                 <h2>{selectedPlaylist.snippet.title}</h2>
-                <YouTube
-                  videoId={currentVideoId}
-                  opts={{ playerVars: { autoplay: 1 } }}
-                  onEnd={handleVideoEnd}
-                  onReady={(event) => {
-                    playerRef.current = event.target;
-                    playerRef.current.setVolume(volume);
-                  }}
-                />
+
+                {!iosPrompted && isIOS && autoPlay && (
+                  <div style={{ textAlign: 'center', margin: '20px' }}>
+                    <button onClick={acknowledgeIosAutoplay}>▶ Start Watching</button>
+                  </div>
+                )}
+
+                {(!isIOS || iosPrompted || !autoPlay) && (
+                  <YouTube
+                    videoId={currentVideoId}
+                    opts={{ playerVars: { autoplay: 1 } }}
+                    onEnd={handleVideoEnd}
+                    onReady={(event) => {
+                      playerRef.current = event.target;
+                      playerRef.current.setVolume(volume);
+                    }}
+                  />
+                )}
+
                 <div>
                   <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
                   <button onClick={() => handleVideoClick(currentIndex + 1)}>Next</button>
@@ -198,6 +217,7 @@ function App() {
                     if (playerRef.current) playerRef.current.setVolume(vol);
                   }} />
                 </div>
+
                 <ul>
                   {playlistVideos.map((video, index) => (
                     <li
