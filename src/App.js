@@ -21,18 +21,16 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState(null);
   const [currentVideoId, setCurrentVideoId] = useState(null);
   const [volume, setVolume] = useState(50);
-  const [isPremium, setIsPremium] = useState(true);
-  const [backgroundPlayback, setBackgroundPlayback] = useState(() => localStorage.getItem('backgroundPlayback') === 'true');
-  const [lowPowerMode, setLowPowerMode] = useState(() => localStorage.getItem('lowPowerMode') === 'true');
+  const [lowPowerMode, setLowPowerMode] = useState(false);
   const [iosPrompted, setIosPrompted] = useState(() => localStorage.getItem('iosAutoplayAcknowledged') === 'true');
-
   const playerRef = useRef(null);
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
   const REDIRECT_URI = 'https://youtube-playlist-sorter.vercel.app';
   const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
   const RESPONSE_TYPE = 'token';
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   useEffect(() => {
     const savedViews = localStorage.getItem('personalViews');
@@ -43,7 +41,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.body.className = `${theme}${lowPowerMode ? ' low-power' : ''}`;
+    document.body.className = theme + (lowPowerMode ? ' low-power' : '');
     localStorage.setItem('theme', theme);
     localStorage.setItem('lowPowerMode', lowPowerMode);
   }, [theme, lowPowerMode]);
@@ -100,10 +98,11 @@ function App() {
     } else {
       setSelectedPlaylist(playlist);
       setAllPlaylistVideos(combined);
+      setNextPageToken(null);
+      const finalSorted = sortVideos(combined, sortType, sortDirection);
+      setPlaylistVideos(finalSorted);
       setCurrentIndex(0);
-      const sorted = sortVideos(combined, sortType, sortDirection);
-      setPlaylistVideos(sorted);
-      setCurrentVideoId(sorted[0]?.snippet.resourceId?.videoId);
+      setCurrentVideoId(finalSorted[0]?.snippet.resourceId?.videoId || null);
     }
   };
 
@@ -129,18 +128,14 @@ function App() {
   };
 
   const handleVideoEnd = () => {
-    if (currentIndex == null) return;
-    const currentVideo = playlistVideos[currentIndex];
-    const videoId = currentVideo.snippet.resourceId?.videoId;
-
-    setPersonalViews((prev) => {
-      const updated = { ...prev, [videoId]: (prev[videoId] || 0) + 1 };
-      localStorage.setItem('personalViews', JSON.stringify(updated));
-      return updated;
+    if (!currentVideoId) return;
+    setPersonalViews(prev => {
+      const newViews = { ...prev };
+      newViews[currentVideoId] = (newViews[currentVideoId] || 0) + 1;
+      return newViews;
     });
 
-    if (!autoPlay) return;
-
+    if (!autoPlay || currentIndex == null) return;
     const nextIndex = currentIndex + 1;
     if (nextIndex < playlistVideos.length) {
       setCurrentIndex(nextIndex);
@@ -149,96 +144,22 @@ function App() {
   };
 
   const handleVideoClick = (index) => {
-    setCurrentIndex(index);
-    setCurrentVideoId(playlistVideos[index].snippet.resourceId?.videoId);
+    if (index >= 0 && index < playlistVideos.length) {
+      setCurrentIndex(index);
+      setCurrentVideoId(playlistVideos[index].snippet.resourceId?.videoId);
+    }
   };
 
   const acknowledgeIosAutoplay = () => {
     localStorage.setItem('iosAutoplayAcknowledged', 'true');
     setIosPrompted(true);
-    setCurrentIndex(0);
     setCurrentVideoId(playlistVideos[0]?.snippet.resourceId?.videoId);
   };
 
   return (
-    <div className={theme} style={{ display: 'flex' }}>
-      <div style={{ flex: 1, textAlign: 'center' }}>
-        {!isLoggedIn ? (
-          <div style={{ marginTop: '20vh' }}>
-            <button onClick={handleLogin}>Log in with Google</button>
-            <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
-          </div>
-        ) : (
-          <>
-            {!selectedPlaylist ? (
-              <ul style={{ marginTop: '10vh' }}>
-                {playlists.map((pl) => (
-                  <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer', marginBottom: '1rem' }}>
-                    <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
-                    <strong>{pl.snippet.title}</strong>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div>
-                <button onClick={() => {
-                  setSelectedPlaylist(null);
-                  setPlaylistVideos([]);
-                  setAllPlaylistVideos([]);
-                  setCurrentIndex(null);
-                  setCurrentVideoId(null);
-                }}>← Back to Playlists</button>
-                <h2>{selectedPlaylist.snippet.title}</h2>
-
-                {!iosPrompted && isIOS && autoPlay && (
-                  <div style={{ textAlign: 'center', margin: '20px' }}>
-                    <button onClick={acknowledgeIosAutoplay}>▶ Start Watching</button>
-                  </div>
-                )}
-
-                {(!isIOS || iosPrompted || !autoPlay) && (
-                  <YouTube
-                    videoId={currentVideoId}
-                    opts={{ playerVars: { autoplay: 1 } }}
-                    onEnd={handleVideoEnd}
-                    onReady={(event) => {
-                      playerRef.current = event.target;
-                      playerRef.current.setVolume(volume);
-                    }}
-                  />
-                )}
-
-                <div>
-                  <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
-                  <button onClick={() => handleVideoClick(currentIndex + 1)}>Next</button>
-                  <input type="range" min="0" max="100" value={volume} onChange={(e) => {
-                    const vol = parseInt(e.target.value);
-                    setVolume(vol);
-                    if (playerRef.current) playerRef.current.setVolume(vol);
-                  }} />
-                </div>
-
-                <ul>
-                  {playlistVideos.map((video, index) => (
-                    <li
-                      key={video.snippet.resourceId?.videoId || index}
-                      onClick={() => handleVideoClick(index)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span style={{ marginRight: '8px' }}>{index + 1}.</span>
-                      <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
-                      <strong>{video.snippet.title}</strong>
-                      <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-      {isLoggedIn && (
-        <div style={{ width: '300px', padding: '20px', position: 'relative', top: '5vh' }}>
+    <div className={`app-container ${theme}`}>
+      {isLoggedIn ? (
+        <>
           <button onClick={() => setShowSettings(!showSettings)}>⚙️ Settings</button>
           {showSettings && (
             <div className="settings">
@@ -269,6 +190,72 @@ function App() {
               )}
             </div>
           )}
+
+          {!selectedPlaylist ? (
+            <ul>
+              {playlists.map((pl) => (
+                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer' }}>
+                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
+                  <strong>{pl.snippet.title}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>
+              <button onClick={() => {
+                setSelectedPlaylist(null);
+                setPlaylistVideos([]);
+                setAllPlaylistVideos([]);
+                setCurrentIndex(null);
+                setCurrentVideoId(null);
+              }}>← Back to Playlists</button>
+              <h2>{selectedPlaylist.snippet.title}</h2>
+
+              {!iosPrompted && isIOS && autoPlay && (
+                <div style={{ textAlign: 'center', margin: '20px' }}>
+                  <button onClick={acknowledgeIosAutoplay}>▶ Start Watching</button>
+                </div>
+              )}
+
+              {(!isIOS || iosPrompted || !autoPlay) && (
+                <YouTube
+                  videoId={currentVideoId}
+                  opts={{ playerVars: { autoplay: 1 } }}
+                  onEnd={handleVideoEnd}
+                  onReady={(event) => {
+                    playerRef.current = event.target;
+                    playerRef.current.setVolume(volume);
+                  }}
+                />
+              )}
+
+              <div>
+                <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
+                <button onClick={() => handleVideoClick(currentIndex + 1)}>Next</button>
+                <input type="range" min="0" max="100" value={volume} onChange={(e) => {
+                  const vol = parseInt(e.target.value);
+                  setVolume(vol);
+                  if (playerRef.current) playerRef.current.setVolume(vol);
+                }} />
+              </div>
+
+              <ul>
+                {playlistVideos.map((video, index) => (
+                  <li key={video.snippet.resourceId?.videoId || index} onClick={() => handleVideoClick(index)}>
+                    <span style={{ marginRight: '8px' }}>{index + 1}.</span>
+                    <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
+                    <strong>{video.snippet.title}</strong>
+                    <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ textAlign: 'center', marginTop: '100px' }}>
+          <button onClick={handleLogin}>Log in with Google</button>
+          <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
         </div>
       )}
     </div>
