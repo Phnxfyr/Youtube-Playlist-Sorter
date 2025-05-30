@@ -35,6 +35,24 @@ function App() {
   const RESPONSE_TYPE = 'token';
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
+  // Utility: Fisher-Yates shuffle
+  const shuffleArray = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  // Shuffle handler
+  const handleShuffle = () => {
+    const shuffled = shuffleArray(allPlaylistVideos);
+    setPlaylistVideos(shuffled);
+    setCurrentIndex(0);
+    setCurrentVideoId(shuffled[0]?.snippet.resourceId.videoId || null);
+  };
+
   // Load saved data
   useEffect(() => {
     const savedViews = localStorage.getItem('personalViews');
@@ -93,7 +111,7 @@ function App() {
     }
   };
 
-  // Fetch playlists (with contentDetails for itemCount)
+  // Fetch playlists (with contentDetails)
   const fetchPlaylists = async (accessToken) => {
     const res = await fetch(
       'https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&mine=true&maxResults=50',
@@ -130,21 +148,23 @@ function App() {
     if (type === 'title') {
       sorted.sort((a, b) => a.snippet.title.localeCompare(b.snippet.title) * factor);
     } else if (type === 'views') {
-      sorted.sort((a, b) => ((personalViews[b.snippet.resourceId.videoId] || 0)
-        - (personalViews[a.snippet.resourceId.videoId] || 0)) * factor);
+      sorted.sort((a, b) => 
+        ((personalViews[b.snippet.resourceId.videoId] || 0) -
+         (personalViews[a.snippet.resourceId.videoId] || 0)) * factor
+      );
     } else if (type === 'dateAdded') {
-      sorted.sort((a, b) =>
+      sorted.sort((a, b) => 
         (new Date(a.snippet.publishedAt) - new Date(b.snippet.publishedAt)) * factor
       );
     } else if (type === 'datePublished') {
-      sorted.sort((a, b) =>
+      sorted.sort((a, b) => 
         (new Date(a.contentDetails.videoPublishedAt) - new Date(b.contentDetails.videoPublishedAt)) * factor
       );
     }
     return sorted;
   };
 
-  // Filtered view for search / favorites / hide-played
+  // Filtered view
   const filteredVideos = playlistVideos.filter(video => {
     const id = video.snippet.resourceId.videoId;
     const matchSearch = video.snippet.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -153,7 +173,7 @@ function App() {
     return matchSearch && matchFav && matchPlayed;
   });
 
-  // Clicking on a list item maps from filtered → full index
+  // Handle list click
   const handleVideoClick = index => {
     const video = filteredVideos[index];
     if (!video) return;
@@ -166,7 +186,7 @@ function App() {
     }
   };
 
-  // When a video ends, count personal view and optionally autoplay next
+  // On video end
   const handleVideoEnd = () => {
     if (!currentVideoId) return;
     setPersonalViews(prev => ({
@@ -208,11 +228,7 @@ function App() {
           // Video player + list view
           <div style={{ width: '100%', maxWidth: '900px' }}>
             <button onClick={() => {
-              setSelectedPlaylist(null);
-              setPlaylistVideos([]);
-              setAllPlaylistVideos([]);
-              setCurrentIndex(null);
-              setCurrentVideoId(null);
+              setSelectedPlaylist(null); setPlaylistVideos([]); setAllPlaylistVideos([]); setCurrentIndex(null); setCurrentVideoId(null);
             }}>
               ← Back to Playlists
             </button>
@@ -246,9 +262,7 @@ function App() {
 
             {/* Controls */}
             <div style={{ margin: '10px 0' }}>
-              <button onClick={() => handleVideoClick(currentIndex - 1)}>
-                Previous
-              </button>
+              <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
               <button
                 onClick={() => handleVideoClick(currentIndex + 1)}
                 style={{ marginLeft: '10px' }}
@@ -268,7 +282,7 @@ function App() {
               />
             </div>
 
-            {/* Filters & sorting */}
+            {/* Filters & sorting with Shuffle */}
             <div style={{ margin: '1em 0' }}>
               <label>Sort by: </label>
               <select
@@ -292,6 +306,12 @@ function App() {
                 style={{ marginLeft: '10px' }}
               >
                 {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+              </button>
+              <button
+                onClick={handleShuffle}
+                style={{ marginLeft: '10px' }}
+              >
+                Shuffle
               </button>
               <input
                 type="text"
