@@ -12,22 +12,21 @@ function App() {
   const [allPlaylistVideos, setAllPlaylistVideos] = useState([]);
   const [nextPageToken, setNextPageToken] = useState(null);
   const [personalViews, setPersonalViews] = useState({});
-  const [favorites, setFavorites] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
   const [theme, setTheme] = useState('light');
   const [sortDirection, setSortDirection] = useState('desc');
   const [sortType, setSortType] = useState('');
-  const [autoPlay, setAutoPlay] = useState(true);
+  const [autoPlay, setAutoPlay] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [currentVideoId, setCurrentVideoId] = useState(null);
   const [volume, setVolume] = useState(50);
-  const [lowPowerMode, setLowPowerMode] = useState(() => localStorage.getItem('lowPowerMode') === 'true');
+  const [lowPowerMode, setLowPowerMode] = useState(false);
   const [iosPrompted, setIosPrompted] = useState(false);
-  const [hidePlayed, setHidePlayed] = useState(true);
-  const [playedVideos, setPlayedVideos] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('favorites')) || []);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [hidePlayed, setHidePlayed] = useState(true);
   const playerRef = useRef(null);
 
   const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
@@ -43,13 +42,10 @@ function App() {
 
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) setTheme(savedTheme);
-
-    const savedFavorites = localStorage.getItem('favorites');
-    if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
   }, []);
 
   useEffect(() => {
-    document.body.className = `${theme}${lowPowerMode ? ' low-power' : ''}`;
+    document.body.className = theme + (lowPowerMode ? ' low-power' : '');
     localStorage.setItem('theme', theme);
     localStorage.setItem('lowPowerMode', lowPowerMode);
   }, [theme, lowPowerMode]);
@@ -81,17 +77,17 @@ function App() {
   };
 
   const handleLogout = () => {
-    const confirmed = window.confirm('Are you sure you want to log out?');
-    if (!confirmed) return;
-
-    setIsLoggedIn(false);
-    setToken('');
-    setSelectedPlaylist(null);
-    setPlaylistVideos([]);
-    setAllPlaylistVideos([]);
-    setCurrentIndex(null);
-    setCurrentVideoId(null);
-    window.location.hash = '';
+    if (window.confirm('Are you sure you want to log out?')) {
+      setToken('');
+      setIsLoggedIn(false);
+      setPlaylists([]);
+      setSelectedPlaylist(null);
+      setPlaylistVideos([]);
+      setAllPlaylistVideos([]);
+      setCurrentIndex(null);
+      setCurrentVideoId(null);
+      window.location.hash = '';
+    }
   };
 
   const fetchPlaylists = async (accessToken) => {
@@ -124,11 +120,10 @@ function App() {
     } else {
       setSelectedPlaylist(playlist);
       setAllPlaylistVideos(combined);
-      setNextPageToken(null);
-      const finalSorted = sortVideos(combined, sortType, sortDirection);
-      setPlaylistVideos(finalSorted);
+      const sorted = sortVideos(combined, sortType, sortDirection);
+      setPlaylistVideos(sorted);
       setCurrentIndex(0);
-      setCurrentVideoId(finalSorted[0]?.snippet.resourceId?.videoId || null);
+      setCurrentVideoId(sorted[0]?.snippet.resourceId?.videoId);
     }
   };
 
@@ -147,7 +142,7 @@ function App() {
     } else if (type === 'dateAdded') {
       sorted.sort((a, b) => (new Date(a.snippet.publishedAt) - new Date(b.snippet.publishedAt)) * factor);
     } else if (type === 'datePublished') {
-      sorted.sort((a, b) => (new Date(a.contentDetails.videoPublishedAt) - new Date(b.contentDetails.videoPublishedAt)) * factor);
+      sorted.sort((a, b) => (new Date(a.contentDetails.videoPublishedAt || 0) - new Date(b.contentDetails.videoPublishedAt || 0)) * factor);
     }
 
     return sorted;
@@ -160,7 +155,6 @@ function App() {
       newViews[currentVideoId] = (newViews[currentVideoId] || 0) + 1;
       return newViews;
     });
-    setPlayedVideos((prev) => new Set(prev).add(currentVideoId));
 
     if (!autoPlay || currentIndex == null) return;
     const nextIndex = currentIndex + 1;
@@ -178,15 +172,18 @@ function App() {
   };
 
   const toggleFavorite = (videoId) => {
-    setFavorites((prev) =>
-      prev.includes(videoId) ? prev.filter(id => id !== videoId) : [...prev, videoId]
-    );
+    setFavorites((prev) => {
+      const updated = prev.includes(videoId) ? prev.filter(id => id !== videoId) : [...prev, videoId];
+      return updated;
+    });
   };
 
-  const filteredVideos = playlistVideos.filter((video) => {
-    if (hidePlayed && playedVideos.has(video.snippet.resourceId?.videoId)) return false;
-    if (searchQuery && !video.snippet.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
+  const filteredVideos = playlistVideos.filter(video => {
+    const videoId = video.snippet.resourceId?.videoId;
+    const matchesSearch = video.snippet.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFavorite = !showFavorites || favorites.includes(videoId);
+    const notPlayed = !hidePlayed || !personalViews[videoId];
+    return matchesSearch && matchesFavorite && notPlayed;
   });
 
   return (
@@ -199,11 +196,15 @@ function App() {
             <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
           </div>
         ) : selectedPlaylist ? (
-          <>
+          <div>
+            <button onClick={() => {
+              setSelectedPlaylist(null);
+              setPlaylistVideos([]);
+              setAllPlaylistVideos([]);
+              setCurrentIndex(null);
+              setCurrentVideoId(null);
+            }}>← Back to Playlists</button>
             <h2>{selectedPlaylist.snippet.title}</h2>
-            <button onClick={handleLogout}>Log Out</button>
-            <input type="text" placeholder="Search videos..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ margin: '10px', padding: '5px' }} />
-            <button onClick={() => setShowFavorites(!showFavorites)}>{showFavorites ? 'Show All' : 'Show Favorites'}</button>
 
             <div>
               <label>Sort by: </label>
@@ -225,45 +226,81 @@ function App() {
               }}>
                 {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
               </button>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search videos..."
+              />
+              <button onClick={() => setShowFavorites(!showFavorites)}>
+                {showFavorites ? 'Show All' : 'Show Favorites'}
+              </button>
             </div>
 
-            <YouTube
-              videoId={currentVideoId}
-              opts={{ playerVars: { autoplay: 1 } }}
-              onEnd={handleVideoEnd}
-              onReady={(event) => {
-                playerRef.current = event.target;
-                playerRef.current.setVolume(volume);
-              }}
-            />
+            {!iosPrompted && isIOS && autoPlay && playlistVideos.length > 0 && (
+              <div style={{ textAlign: 'center', margin: '20px' }}>
+                <button onClick={() => {
+                  setIosPrompted(true);
+                  setCurrentVideoId(playlistVideos[0]?.snippet.resourceId?.videoId);
+                }}>▶ Start Watching</button>
+              </div>
+            )}
+
+            {(!isIOS || iosPrompted || !autoPlay) && currentVideoId && (
+              <YouTube
+                videoId={currentVideoId}
+                opts={{ playerVars: { autoplay: 1 } }}
+                onEnd={handleVideoEnd}
+                onReady={(event) => {
+                  playerRef.current = event.target;
+                  playerRef.current.setVolume(volume);
+                }}
+              />
+            )}
+
             <div>
               <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
               <button onClick={() => handleVideoClick(currentIndex + 1)}>Next</button>
-              <input type="range" min="0" max="100" value={volume} onChange={(e) => {
-                const vol = parseInt(e.target.value);
-                setVolume(vol);
-                if (playerRef.current) playerRef.current.setVolume(vol);
-              }} />
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(e) => {
+                  const vol = parseInt(e.target.value);
+                  setVolume(vol);
+                  if (playerRef.current) playerRef.current.setVolume(vol);
+                }}
+              />
             </div>
 
             <ul>
-              {(showFavorites ? playlistVideos.filter(v => favorites.includes(v.snippet.resourceId?.videoId)) : filteredVideos).map((video, index) => (
-                <li key={index} onClick={() => handleVideoClick(index)}>
-                  {video.snippet.title} - Views: {personalViews[video.snippet.resourceId?.videoId] || 0}
-                  <button onClick={(e) => { e.stopPropagation(); toggleFavorite(video.snippet.resourceId?.videoId); }}>
-                    {favorites.includes(video.snippet.resourceId?.videoId) ? '★' : '☆'}
-                  </button>
-                </li>
-              ))}
+              {filteredVideos.map((video, index) => {
+                const videoId = video.snippet.resourceId?.videoId;
+                return (
+                  <li key={videoId || index} onClick={() => handleVideoClick(index)}>
+                    <span style={{ marginRight: '8px' }}>{index + 1}.</span>
+                    <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
+                    <strong>{video.snippet.title}</strong>
+                    <div>Views: {personalViews[videoId] || 0}</div>
+                    <button onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(videoId);
+                    }}>
+                      {favorites.includes(videoId) ? '★' : '☆'}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
-          </>
+          </div>
         ) : (
           <>
             <button onClick={handleLogout} style={{ marginTop: '1rem' }}>Log Out</button>
-            <ul style={{ marginTop: '10vh' }}>
+            <ul style={{ marginTop: '10vh', fontSize: '1.2em' }}>
               {playlists.map((pl) => (
-                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer' }}>
-                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
+                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer', marginBottom: '1em' }}>
+                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ width: '100px', height: '100px' }} /><br />
                   <strong>{pl.snippet.title}</strong>
                 </li>
               ))}
