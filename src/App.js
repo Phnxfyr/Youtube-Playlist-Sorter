@@ -157,9 +157,81 @@ function App() {
   };
 
   return (
-    <div className={`app-container ${theme}`}>
-      {isLoggedIn ? (
-        <>
+    <div className={`app-container ${theme}`} style={{ display: 'flex' }}>
+      <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        {!isLoggedIn ? (
+          <div style={{ marginTop: '20vh' }}>
+            <button onClick={handleLogin}>Log in with Google</button>
+            <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
+          </div>
+        ) : (
+          <>
+            {!selectedPlaylist ? (
+              <ul style={{ marginTop: '10vh' }}>
+                {playlists.map((pl) => (
+                  <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer' }}>
+                    <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
+                    <strong>{pl.snippet.title}</strong>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div>
+                <button onClick={() => {
+                  setSelectedPlaylist(null);
+                  setPlaylistVideos([]);
+                  setAllPlaylistVideos([]);
+                  setCurrentIndex(null);
+                  setCurrentVideoId(null);
+                }}>← Back to Playlists</button>
+                <h2>{selectedPlaylist.snippet.title}</h2>
+
+                {!iosPrompted && isIOS && autoPlay && (
+                  <div style={{ textAlign: 'center', margin: '20px' }}>
+                    <button onClick={acknowledgeIosAutoplay}>▶ Start Watching</button>
+                  </div>
+                )}
+
+                {(!isIOS || iosPrompted || !autoPlay) && (
+                  <YouTube
+                    videoId={currentVideoId}
+                    opts={{ playerVars: { autoplay: 1 } }}
+                    onEnd={handleVideoEnd}
+                    onReady={(event) => {
+                      playerRef.current = event.target;
+                      playerRef.current.setVolume(volume);
+                    }}
+                  />
+                )}
+
+                <div>
+                  <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
+                  <button onClick={() => handleVideoClick(currentIndex + 1)}>Next</button>
+                  <input type="range" min="0" max="100" value={volume} onChange={(e) => {
+                    const vol = parseInt(e.target.value);
+                    setVolume(vol);
+                    if (playerRef.current) playerRef.current.setVolume(vol);
+                  }} />
+                </div>
+
+                <ul>
+                  {playlistVideos.map((video, index) => (
+                    <li key={video.snippet.resourceId?.videoId || index} onClick={() => handleVideoClick(index)}>
+                      <span style={{ marginRight: '8px' }}>{index + 1}.</span>
+                      <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
+                      <strong>{video.snippet.title}</strong>
+                      <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {isLoggedIn && (
+        <div style={{ width: '280px', padding: '20px', marginTop: '10vh' }}>
           <button onClick={() => setShowSettings(!showSettings)}>⚙️ Settings</button>
           {showSettings && (
             <div className="settings">
@@ -190,72 +262,6 @@ function App() {
               )}
             </div>
           )}
-
-          {!selectedPlaylist ? (
-            <ul>
-              {playlists.map((pl) => (
-                <li key={pl.id} onClick={() => fetchPlaylistVideos(pl)} style={{ cursor: 'pointer' }}>
-                  <img src={pl.snippet.thumbnails?.default?.url || ''} alt="thumbnail" /><br />
-                  <strong>{pl.snippet.title}</strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div>
-              <button onClick={() => {
-                setSelectedPlaylist(null);
-                setPlaylistVideos([]);
-                setAllPlaylistVideos([]);
-                setCurrentIndex(null);
-                setCurrentVideoId(null);
-              }}>← Back to Playlists</button>
-              <h2>{selectedPlaylist.snippet.title}</h2>
-
-              {!iosPrompted && isIOS && autoPlay && (
-                <div style={{ textAlign: 'center', margin: '20px' }}>
-                  <button onClick={acknowledgeIosAutoplay}>▶ Start Watching</button>
-                </div>
-              )}
-
-              {(!isIOS || iosPrompted || !autoPlay) && (
-                <YouTube
-                  videoId={currentVideoId}
-                  opts={{ playerVars: { autoplay: 1 } }}
-                  onEnd={handleVideoEnd}
-                  onReady={(event) => {
-                    playerRef.current = event.target;
-                    playerRef.current.setVolume(volume);
-                  }}
-                />
-              )}
-
-              <div>
-                <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
-                <button onClick={() => handleVideoClick(currentIndex + 1)}>Next</button>
-                <input type="range" min="0" max="100" value={volume} onChange={(e) => {
-                  const vol = parseInt(e.target.value);
-                  setVolume(vol);
-                  if (playerRef.current) playerRef.current.setVolume(vol);
-                }} />
-              </div>
-
-              <ul>
-                {playlistVideos.map((video, index) => (
-                  <li key={video.snippet.resourceId?.videoId || index} onClick={() => handleVideoClick(index)}>
-                    <span style={{ marginRight: '8px' }}>{index + 1}.</span>
-                    <img src={video.snippet.thumbnails?.default?.url || ''} alt="thumbnail" style={{ verticalAlign: 'middle' }} />
-                    <strong>{video.snippet.title}</strong>
-                    <div>Views: {personalViews[video.snippet.resourceId?.videoId] || 0}</div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </>
-      ) : (
-        <div style={{ textAlign: 'center', marginTop: '100px' }}>
-          <button onClick={handleLogin}>Log in with Google</button>
-          <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms and Conditions</a></p>
         </div>
       )}
     </div>
