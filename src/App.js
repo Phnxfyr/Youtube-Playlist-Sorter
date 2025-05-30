@@ -186,13 +186,13 @@ function App() {
                 }}>← Back to Playlists</button>
                 <h2>{selectedPlaylist.snippet.title}</h2>
 
-                {!iosPrompted && isIOS && autoPlay && (
+                {!iosPrompted && isIOS && autoPlay && playlistVideos.length > 0 && (
                   <div style={{ textAlign: 'center', margin: '20px' }}>
                     <button onClick={acknowledgeIosAutoplay}>▶ Start Watching</button>
                   </div>
                 )}
 
-                {(!isIOS || iosPrompted || !autoPlay) && (
+                {(!isIOS || iosPrompted || !autoPlay) && currentVideoId && (
                   <YouTube
                     videoId={currentVideoId}
                     opts={{ playerVars: { autoplay: 1 } }}
