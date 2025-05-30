@@ -22,7 +22,7 @@ function App() {
   const [currentVideoId, setCurrentVideoId] = useState(null);
   const [volume, setVolume] = useState(50);
   const [lowPowerMode, setLowPowerMode] = useState(false);
-  const [iosPrompted, setIosPrompted] = useState(() => localStorage.getItem('iosAutoplayAcknowledged') === 'true');
+  const [iosPrompted, setIosPrompted] = useState(false); // no longer from localStorage
   const playerRef = useRef(null);
 
   const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
@@ -151,7 +151,6 @@ function App() {
   };
 
   const acknowledgeIosAutoplay = () => {
-    localStorage.setItem('iosAutoplayAcknowledged', 'true');
     setIosPrompted(true);
     setCurrentVideoId(playlistVideos[0]?.snippet.resourceId?.videoId);
   };
