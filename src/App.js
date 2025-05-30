@@ -22,7 +22,7 @@ function App() {
   const [currentVideoId, setCurrentVideoId] = useState(null);
   const [volume, setVolume] = useState(50);
   const [lowPowerMode, setLowPowerMode] = useState(false);
-  const [iosPrompted, setIosPrompted] = useState(false); // no longer from localStorage
+  const [iosPrompted, setIosPrompted] = useState(false);
   const playerRef = useRef(null);
 
   const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
@@ -184,6 +184,28 @@ function App() {
                   setCurrentVideoId(null);
                 }}>← Back to Playlists</button>
                 <h2>{selectedPlaylist.snippet.title}</h2>
+
+                <div>
+                  <label>Sort by: </label>
+                  <select value={sortType} onChange={(e) => {
+                    const newType = e.target.value;
+                    setSortType(newType);
+                    setPlaylistVideos(sortVideos(playlistVideos, newType, sortDirection));
+                  }}>
+                    <option value="">None</option>
+                    <option value="title">Title</option>
+                    <option value="views">Views</option>
+                    <option value="dateAdded">Date Added</option>
+                    <option value="datePublished">Date Published</option>
+                  </select>
+                  <button onClick={() => {
+                    const newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                    setSortDirection(newDirection);
+                    setPlaylistVideos(sortVideos(playlistVideos, sortType, newDirection));
+                  }}>
+                    {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+                  </button>
+                </div>
 
                 {!iosPrompted && isIOS && autoPlay && playlistVideos.length > 0 && (
                   <div style={{ textAlign: 'center', margin: '20px' }}>
