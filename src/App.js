@@ -189,14 +189,34 @@ function App() {
   // On video end
   const handleVideoEnd = () => {
     if (!currentVideoId) return;
+    // Increment personal views
     setPersonalViews(prev => ({
       ...prev,
       [currentVideoId]: (prev[currentVideoId] || 0) + 1
     }));
-    if (autoPlay && currentIndex != null && currentIndex + 1 < playlistVideos.length) {
-      const next = currentIndex + 1;
-      setCurrentIndex(next);
-      setCurrentVideoId(playlistVideos[next].snippet.resourceId.videoId);
+
+    if (!autoPlay) return;
+
+    let nextVideo;
+    if (showFavorites) {
+      // Advance to the next favorite in the filtered list
+      const favList = filteredVideos;
+      const idx = favList.findIndex(v => v.snippet.resourceId.videoId === currentVideoId);
+      if (idx !== -1 && idx + 1 < favList.length) {
+        nextVideo = favList[idx + 1];
+      }
+    }
+
+    // Fallback to full playlist if no favorite next
+    if (!nextVideo && currentIndex != null && currentIndex + 1 < playlistVideos.length) {
+      nextVideo = playlistVideos[currentIndex + 1];
+    }
+
+    if (nextVideo) {
+      const nextId = nextVideo.snippet.resourceId.videoId;
+      const fullIdx = playlistVideos.findIndex(v => v.snippet.resourceId.videoId === nextId);
+      setCurrentIndex(fullIdx);
+      setCurrentVideoId(nextId);
     }
   };
 
