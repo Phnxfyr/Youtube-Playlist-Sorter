@@ -135,11 +135,19 @@ function App() {
     }
     setSelectedPlaylist(playlist);
     setAllPlaylistVideos(combined);
-    const sorted = sortVideos(combined, sortType, sortDirection);
+    // After fetching & sorting allPlaylistVideos:
+    const sorted = sortVideos(allPlaylistVideos, sortType, sortDirection);
     setPlaylistVideos(sorted);
-    setCurrentIndex(0);
-    setCurrentVideoId(sorted[0]?.snippet.resourceId.videoId || null);
-  };
+
+      // Instead of “sorted[0]”, pick filteredVideos[0]:
+    const initialVisible = filteredVideos[0]?.snippet.resourceId.videoId || null;
+    setCurrentIndex(
+        // find the index of initialVisible in sorted, or 0 if not found
+       sorted.findIndex(v => v.snippet.resourceId.videoId === initialVisible)
+      );
+      setCurrentVideoId(initialVisible);
+
+        };
 
   // Sorting helper
   const sortVideos = (videos, type, direction) => {
