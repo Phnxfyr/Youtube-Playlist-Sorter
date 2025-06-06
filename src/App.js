@@ -8,6 +8,7 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [token, setToken] = useState('');
   const [playlists, setPlaylists] = useState([]);
+  const [playlistDurations, setPlaylistDurations] = useState({}); // playlistId → “H:MM:SS”
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [playlistVideos, setPlaylistVideos] = useState([]);
   const [allPlaylistVideos, setAllPlaylistVideos] = useState([]);
@@ -34,6 +35,62 @@ function App() {
   const SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
   const RESPONSE_TYPE = 'token';
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  // Utility: parse ISO8601 "PT#H#M#S" to total seconds
+  const parseISODuration = (iso) => {
+    const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!match) return 0;
+    const hours   = parseInt(match[1] || '0', 10);
+    const minutes = parseInt(match[2] || '0', 10);
+    const seconds = parseInt(match[3] || '0', 10);
+    return hours * 3600 + minutes * 60 + seconds;
+  };
+
+  // Calculate total duration for a given playlistId
+  const calculatePlaylistDuration = async (playlistId, pageToken = '', accumulatedIds = []) => {
+    // Step A: fetch playlistItems (contentDetails.videoId)
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId=${playlistId}` +
+      (pageToken ? `&pageToken=${pageToken}` : ''),
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await res.json();
+    const ids = data.items.map(item => item.contentDetails.videoId);
+    const combinedIds = [...accumulatedIds, ...ids];
+
+    if (data.nextPageToken) {
+      return calculatePlaylistDuration(playlistId, data.nextPageToken, combinedIds);
+    }
+
+    // Step B: fetch video durations in chunks of 50
+    let totalSeconds = 0;
+    for (let i = 0; i < combinedIds.length; i += 50) {
+      const chunk = combinedIds.slice(i, i + 50).join(',');
+      const vidRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${chunk}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const vidData = await vidRes.json();
+      vidData.items.forEach(v => {
+        totalSeconds += parseISODuration(v.contentDetails.duration);
+      });
+    }
+
+    // Step C: format "H:MM:SS" or "MM:SS"
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    const formatted =
+      `${h > 0 ? h + ':' : ''}` +
+      `${h > 0 ? String(m).padStart(2, '0') : m}:` +
+      `${String(s).padStart(2, '0')}`;
+
+    // Step D: save into state
+    setPlaylistDurations(prev => ({
+      ...prev,
+      [playlistId]: formatted
+    }));
+  };
 
   // Utility: Fisher-Yates shuffle
   const shuffleArray = (arr) => {
@@ -91,7 +148,8 @@ function App() {
 
   // Handlers
   const handleLogin = () => {
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}` +
+    const authUrl =
+      `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}` +
       `&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&response_type=${RESPONSE_TYPE}` +
       `&include_granted_scopes=true`;
     window.location.href = authUrl;
@@ -102,6 +160,7 @@ function App() {
       setToken('');
       setIsLoggedIn(false);
       setPlaylists([]);
+      setPlaylistDurations({});
       setSelectedPlaylist(null);
       setPlaylistVideos([]);
       setAllPlaylistVideos([]);
@@ -111,7 +170,7 @@ function App() {
     }
   };
 
-  // Fetch playlists (with contentDetails)
+  // Fetch playlists (with contentDetails) + kick off duration calculations
   const fetchPlaylists = async (accessToken) => {
     const res = await fetch(
       'https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&mine=true&maxResults=50',
@@ -119,6 +178,11 @@ function App() {
     );
     const data = await res.json();
     setPlaylists(data.items || []);
+
+    // For each playlist, calculate total duration in background
+    data.items?.forEach(pl => {
+      calculatePlaylistDuration(pl.id);
+    });
   };
 
   // Recursively fetch all videos in a playlist
@@ -135,19 +199,11 @@ function App() {
     }
     setSelectedPlaylist(playlist);
     setAllPlaylistVideos(combined);
-    // After fetching & sorting allPlaylistVideos:
-    const sorted = sortVideos(allPlaylistVideos, sortType, sortDirection);
+    const sorted = sortVideos(combined, sortType, sortDirection);
     setPlaylistVideos(sorted);
-
-      // Instead of “sorted[0]”, pick filteredVideos[0]:
-    const initialVisible = filteredVideos[0]?.snippet.resourceId.videoId || null;
-    setCurrentIndex(
-        // find the index of initialVisible in sorted, or 0 if not found
-       sorted.findIndex(v => v.snippet.resourceId.videoId === initialVisible)
-      );
-      setCurrentVideoId(initialVisible);
-
-        };
+    setCurrentIndex(0);
+    setCurrentVideoId(sorted[0]?.snippet.resourceId.videoId || null);
+  };
 
   // Sorting helper
   const sortVideos = (videos, type, direction) => {
@@ -156,32 +212,44 @@ function App() {
     if (type === 'title') {
       sorted.sort((a, b) => a.snippet.title.localeCompare(b.snippet.title) * factor);
     } else if (type === 'views') {
-      sorted.sort((a, b) => 
+      sorted.sort((a, b) =>
         ((personalViews[b.snippet.resourceId.videoId] || 0) -
          (personalViews[a.snippet.resourceId.videoId] || 0)) * factor
       );
     } else if (type === 'dateAdded') {
-      sorted.sort((a, b) => 
+      sorted.sort((a, b) =>
         (new Date(a.snippet.publishedAt) - new Date(b.snippet.publishedAt)) * factor
       );
     } else if (type === 'datePublished') {
-      sorted.sort((a, b) => 
+      sorted.sort((a, b) =>
         (new Date(a.contentDetails.videoPublishedAt) - new Date(b.contentDetails.videoPublishedAt)) * factor
       );
     }
     return sorted;
   };
 
-  // Filtered view
-  const filteredVideos = playlistVideos.filter(video => {
-    const id = video.snippet.resourceId.videoId;
-    const matchSearch = video.snippet.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchFav = !showFavorites || favorites.includes(id);
-    const matchPlayed = !hidePlayed || !personalViews[id];
-    return matchSearch && matchFav && matchPlayed;
-  });
+  // Filtered view with “hidePlayed” pushing played to bottom when toggled off
+  const filteredVideos = (() => {
+    // First filter by search & favorites
+    let shown = playlistVideos.filter(video => {
+      const id = video.snippet.resourceId.videoId;
+      const matchSearch = video.snippet.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchFav = !showFavorites || favorites.includes(id);
+      return matchSearch && matchFav;
+    });
+    if (hidePlayed) {
+      // Only keep unplayed
+      shown = shown.filter(video => !personalViews[video.snippet.resourceId.videoId]);
+    } else {
+      // Push played to bottom
+      const unplayed = shown.filter(video => !personalViews[video.snippet.resourceId.videoId]);
+      const played = shown.filter(video => personalViews[video.snippet.resourceId.videoId]);
+      shown = [...unplayed, ...played];
+    }
+    return shown;
+  })();
 
-  // Handle list click
+  // Handle list click (mapped by filteredVideos → full index)
   const handleVideoClick = index => {
     const video = filteredVideos[index];
     if (!video) return;
@@ -194,10 +262,10 @@ function App() {
     }
   };
 
-  // On video end
+  // On video end: increment personalViews + advance (favorites / full list)
   const handleVideoEnd = () => {
     if (!currentVideoId) return;
-    // Increment personal views
+    // 1) increment count
     setPersonalViews(prev => ({
       ...prev,
       [currentVideoId]: (prev[currentVideoId] || 0) + 1
@@ -207,22 +275,24 @@ function App() {
 
     let nextVideo;
     if (showFavorites) {
-      // Advance to the next favorite in the filtered list
-      const favList = filteredVideos;
-      const idx = favList.findIndex(v => v.snippet.resourceId.videoId === currentVideoId);
+      // next favorite in filteredVideos
+      const favList = filteredVideos.filter(v => favorites.includes(v.snippet.resourceId.videoId));
+      const idx = favList.findIndex(
+        v => v.snippet.resourceId.videoId === currentVideoId
+      );
       if (idx !== -1 && idx + 1 < favList.length) {
         nextVideo = favList[idx + 1];
       }
     }
-
-    // Fallback to full playlist if no favorite next
+    // fallback: next in playlistVideos
     if (!nextVideo && currentIndex != null && currentIndex + 1 < playlistVideos.length) {
       nextVideo = playlistVideos[currentIndex + 1];
     }
-
     if (nextVideo) {
       const nextId = nextVideo.snippet.resourceId.videoId;
-      const fullIdx = playlistVideos.findIndex(v => v.snippet.resourceId.videoId === nextId);
+      const fullIdx = playlistVideos.findIndex(
+        v => v.snippet.resourceId.videoId === nextId
+      );
       setCurrentIndex(fullIdx);
       setCurrentVideoId(nextId);
     }
@@ -232,8 +302,11 @@ function App() {
     <div className={`app-container ${theme}`} style={{ display: 'flex' }}>
       {/* Main content */}
       <div style={{
-        flex: 1, textAlign: 'center',
-        display: 'flex', flexDirection: 'column', alignItems: 'center'
+        flex: 1,
+        textAlign: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center'
       }}>
         {!isLoggedIn ? (
           // Login screen
@@ -256,7 +329,11 @@ function App() {
           // Video player + list view
           <div style={{ width: '100%', maxWidth: '900px' }}>
             <button onClick={() => {
-              setSelectedPlaylist(null); setPlaylistVideos([]); setAllPlaylistVideos([]); setCurrentIndex(null); setCurrentVideoId(null);
+              setSelectedPlaylist(null);
+              setPlaylistVideos([]);
+              setAllPlaylistVideos([]);
+              setCurrentIndex(null);
+              setCurrentVideoId(null);
             }}>
               ← Back to Playlists
             </button>
@@ -290,7 +367,9 @@ function App() {
 
             {/* Controls */}
             <div style={{ margin: '10px 0' }}>
-              <button onClick={() => handleVideoClick(currentIndex - 1)}>Previous</button>
+              <button onClick={() => handleVideoClick(currentIndex - 1)}>
+                Previous
+              </button>
               <button
                 onClick={() => handleVideoClick(currentIndex + 1)}
                 style={{ marginLeft: '10px' }}
@@ -299,7 +378,8 @@ function App() {
               </button>
               <input
                 type="range"
-                min="0" max="100"
+                min="0"
+                max="100"
                 value={volume}
                 onChange={e => {
                   const v = +e.target.value;
@@ -328,8 +408,12 @@ function App() {
               </select>
               <button
                 onClick={() => {
-                  setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
-                  setPlaylistVideos(sortVideos(allPlaylistVideos, sortType, sortDirection === 'asc' ? 'desc' : 'asc'));
+                  setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
+                  setPlaylistVideos(sortVideos(
+                    allPlaylistVideos,
+                    sortType,
+                    sortDirection === 'asc' ? 'desc' : 'asc'
+                  ));
                 }}
                 style={{ marginLeft: '10px' }}
               >
@@ -351,7 +435,10 @@ function App() {
               <button onClick={() => setShowFavorites(f => !f)}>
                 {showFavorites ? 'Show All' : 'Show Favorites'}
               </button>
-              <button onClick={() => setHidePlayed(h => !h)} style={{ marginLeft: '10px' }}>
+              <button
+                onClick={() => setHidePlayed(h => !h)}
+                style={{ marginLeft: '10px' }}
+              >
                 {hidePlayed ? 'Show Played' : 'Hide Played'}
               </button>
             </div>
@@ -384,7 +471,9 @@ function App() {
                     <button
                       onClick={e => {
                         e.stopPropagation();
-                        setFavorites(f => f.includes(id) ? f.filter(x => x !== id) : [...f, id]);
+                        setFavorites(f => 
+                          f.includes(id) ? f.filter(x => x !== id) : [...f, id]
+                        );
                       }}
                       style={{ fontSize: '1.2em' }}
                     >
@@ -427,7 +516,12 @@ function App() {
                       {pl.contentDetails.itemCount}
                     </span>
                   </div>
-                  <strong>{pl.snippet.title}</strong>
+                  <div style={{ flex: 1, textAlign: 'left' }}>
+                    <strong>{pl.snippet.title}</strong>
+                    <div style={{ fontSize: '0.9em', color: '#555' }}>
+                      {playlistDurations[pl.id] || 'Loading...'}
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -438,8 +532,10 @@ function App() {
       {/* Settings drawer */}
       {isLoggedIn && (
         <div style={{
-          width: '300px', padding: '20px',
-          position: 'sticky', top: '10vh'
+          width: '300px',
+          padding: '20px',
+          position: 'sticky',
+          top: '10vh'
         }}>
           <button
             onClick={() => setShowSettings(s => !s)}
@@ -482,20 +578,22 @@ function App() {
                   </button>
                 </>
               )}
-              {activeTab === 'theme' && (<> 
-                <button
-                  onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-                  style={{ display: 'block', margin: '10px 0' }}
-                >
-                  {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
-                </button>
-                <button
-                  onClick={() => setLowPowerMode(l => !l)}
-                  style={{ display: 'block', margin: '10px 0' }}
-                >
-                  {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
-                </button>
-              </>)}
+              {activeTab === 'theme' && (
+                <>
+                  <button
+                    onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+                    style={{ display: 'block', margin: '10px 0' }}
+                  >
+                    {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
+                  </button>
+                  <button
+                    onClick={() => setLowPowerMode(l => !l)}
+                    style={{ display: 'block', margin: '10px 0' }}
+                  >
+                    {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
