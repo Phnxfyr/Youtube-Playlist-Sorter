@@ -459,8 +459,8 @@ function App() {
           width: '100%',
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
-          padding: '8px 12px',
+          gap: 14,                 // slightly larger gap
+          padding: '10px 14px',    // slightly more padding
           background: headerBg,
           color: headerFg,
           borderBottom: theme === 'dark' ? '1px solid #222' : '1px solid #eee'
@@ -469,9 +469,9 @@ function App() {
         <img
           src="/ytps-logo.png"
           alt="YouTube Playlist Sorter"
-          width={28}
-          height={28}
-          style={{ borderRadius: 6, cursor: 'pointer' }}
+          width={40}              // bigger sticky logo
+          height={40}
+          style={{ borderRadius: 8, cursor: 'pointer' }}
           onClick={goHome}
         />
         <button
@@ -534,7 +534,7 @@ function App() {
           ) : selectedPlaylist ? (
             // Video player + list view
             <div style={{ width: '100%', maxWidth: '900px' }}>
-              {/* Removed the "Back to Playlists" button — use top-left logo/name */}
+              {/* Use top-left logo/name to go home */}
               <h2>{selectedPlaylist.snippet.title}</h2>
 
               {/* iOS autoplay prompt */}
@@ -701,7 +701,6 @@ function App() {
           ) : (
             // Playlist selection
             <>
-              {/* Removed the separate Log Out button from here (now in Settings) */}
               <ul style={{ listStyle: 'none', padding: 0, marginTop: '5vh' }}>
                 {playlists.map(pl => (
                   <li
