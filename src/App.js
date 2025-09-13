@@ -45,9 +45,10 @@ function App() {
   const RESPONSE_TYPE = 'token';
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-  // Auto-logout when idle (no user activity + not playing video)
-  const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
-  const INACTIVITY_CHECK_MS = 10 * 1000;      // check every 10s
+  // Auto-logout when idle (no user activity + no recent playback progress)
+  const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 min
+  const INACTIVITY_CHECK_MS = 10 * 1000;      // every 10s
+  const PLAYBACK_RECENT_MS = 30 * 1000;       // if progress moved in last 30s, treat as active
 
   // ===== State & refs =====
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -72,15 +73,17 @@ function App() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [loopWindow, setLoopWindow] = useState(true); // show only next 10 from current
   const [searchQuery, setSearchQuery] = useState(''); // single source of truth
-
-  // "Load more" limit for full list mode (+10 each click)
-  const [fullLimit, setFullLimit] = useState(10);
+  const [fullLimit, setFullLimit] = useState(10);     // "Load more" for full list mode
 
   const playerRef = useRef(null);
 
-  // Refs for inactivity logic
+  // Inactivity + playback tracking
   const lastActiveRef = useRef(Date.now());
+  const lastPlaybackTickRef = useRef(0);  // last time we saw currentTime change
+  const lastTimeRef = useRef(0);          // last currentTime value
   const isPlayingRef = useRef(false);
+  const progressIntervalRef = useRef(null);
+  const countedThisPlayRef = useRef(false); // did we already count this video in current play?
   const idleIntervalRef = useRef(null);
 
   // OAuth CSRF state
@@ -278,6 +281,7 @@ function App() {
     setCurrentIndex(0);
     setCurrentVideoId(sorted[0]?.snippet?.resourceId?.videoId || null);
     markActivity();
+    resetPlaybackCounters();
   };
 
   // ===== Sorting & list logic =====
@@ -374,6 +378,7 @@ function App() {
     const fullIdx = playlistVideos.findIndex(v => v.snippet.resourceId.videoId === nextId);
     if (fullIdx !== -1) setCurrentIndex(fullIdx);
     markActivity();
+    resetPlaybackCounters();
   };
 
   const goPrev = () => {
@@ -386,6 +391,7 @@ function App() {
     const fullIdx = playlistVideos.findIndex(v => v.snippet.resourceId.videoId === prevId);
     if (fullIdx !== -1) setCurrentIndex(fullIdx);
     markActivity();
+    resetPlaybackCounters();
   };
 
   const handleVideoClick = index => {
@@ -396,19 +402,78 @@ function App() {
     const fullIndex = playlistVideos.findIndex(v => v.snippet.resourceId.videoId === id);
     if (fullIndex !== -1) setCurrentIndex(fullIndex);
     markActivity();
+    resetPlaybackCounters();
+  };
+
+  const incrementPersonalViewOnce = (videoId) => {
+    if (!videoId) return;
+    if (countedThisPlayRef.current) return; // already counted this playthrough
+    countedThisPlayRef.current = true;
+    setPersonalViews(prev => ({
+      ...prev,
+      [videoId]: (prev[videoId] || 0) + 1
+    }));
   };
 
   const handleVideoEnd = () => {
     if (!currentVideoId) return;
-    setPersonalViews(prev => ({
-      ...prev,
-      [currentVideoId]: (prev[currentVideoId] || 0) + 1
-    }));
+    // If we never hit 60% threshold, count on end
+    if (!countedThisPlayRef.current) {
+      incrementPersonalViewOnce(currentVideoId);
+    }
     if (autoPlay) goNext();
   };
 
-  // ===== Inactivity tracking =====
+  // ===== Inactivity + playback polling =====
   const markActivity = () => { lastActiveRef.current = Date.now(); };
+
+  const resetPlaybackCounters = () => {
+    countedThisPlayRef.current = false;
+    lastTimeRef.current = 0;
+    lastPlaybackTickRef.current = 0;
+  };
+
+  const startProgressPolling = () => {
+    stopProgressPolling();
+    progressIntervalRef.current = setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
+      try {
+        const state = p.getPlayerState?.();
+        // Treat playing & buffering as active
+        if (state === 1 || state === 3) {
+          isPlayingRef.current = true;
+        } else if (state === 2 || state === 0) {
+          // paused or ended
+          isPlayingRef.current = false;
+        }
+
+        const cur = typeof p.getCurrentTime === 'function' ? p.getCurrentTime() : 0;
+        const dur = typeof p.getDuration === 'function' ? p.getDuration() : 0;
+
+        // If time advanced, mark playback activity
+        if (cur && cur !== lastTimeRef.current) {
+          lastPlaybackTickRef.current = Date.now();
+          lastTimeRef.current = cur;
+          markActivity();
+        }
+
+        // 60% watched threshold → count once
+        if (!countedThisPlayRef.current && dur > 0 && cur / dur >= 0.6) {
+          incrementPersonalViewOnce(currentVideoId);
+        }
+      } catch (e) {
+        // Some browsers can throw if player not ready; ignore
+      }
+    }, 2000);
+  };
+
+  const stopProgressPolling = () => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
     // user interaction events
@@ -419,25 +484,29 @@ function App() {
       if (!document.hidden) markActivity();
     });
 
-    // periodic check
+    // periodic idle check
     idleIntervalRef.current = setInterval(async () => {
-      const idleMs = Date.now() - lastActiveRef.current;
-      if (!isPlayingRef.current && idleMs >= INACTIVITY_LIMIT_MS) {
-        // no activity AND not playing → logout + hard refresh
-        await safeLogout(); // includes window.location.replace
+      const now = Date.now();
+      const idleMs = now - lastActiveRef.current;
+      const sincePlaybackMs = now - (lastPlaybackTickRef.current || 0);
+      const playbackRecentlyActive = sincePlaybackMs <= PLAYBACK_RECENT_MS;
+
+      if (!playbackRecentlyActive && idleMs >= INACTIVITY_LIMIT_MS) {
+        await safeLogout(); // includes hard redirect
       }
     }, INACTIVITY_CHECK_MS);
 
     return () => {
       events.forEach(ev => window.removeEventListener(ev, onAnyActivity));
       if (idleIntervalRef.current) clearInterval(idleIntervalRef.current);
+      stopProgressPolling();
     };
-  }, []); // run once
+  }, []); // once
 
-  // Track player state (1=playing, 2=paused, 0=ended, -1=unstarted, 3=buffering)
+  // Track player state
   const onPlayerStateChange = (e) => {
     const st = e.data;
-    if (st === 1) { // playing
+    if (st === 1 || st === 3) { // playing or buffering
       isPlayingRef.current = true;
       markActivity();
     } else {
@@ -445,9 +514,20 @@ function App() {
     }
   };
 
-  // Also mark activity when current video changes
+  // Start/stop polling when player becomes ready
+  const onPlayerReady = (e) => {
+    playerRef.current = e.target;
+    playerRef.current.setVolume(volume);
+    markActivity();
+    startProgressPolling();
+  };
+
+  // Also restart polling when current video changes
   useEffect(() => {
-    if (currentVideoId) markActivity();
+    if (playerRef.current && currentVideoId) {
+      resetPlaybackCounters();
+      startProgressPolling();
+    }
   }, [currentVideoId]);
 
   // === BrandBar (sticky top-left logo — hidden on login) ===
@@ -458,6 +538,7 @@ function App() {
     setCurrentIndex(null);
     setCurrentVideoId(null);
     setIosPrompted(false);
+    resetPlaybackCounters();
   };
 
   const BrandBar = () => {
@@ -565,11 +646,7 @@ function App() {
                   <YouTube
                     videoId={currentVideoId}
                     opts={{ playerVars: { autoplay: 1, controls: 1 } }}
-                    onReady={e => {
-                      playerRef.current = e.target;
-                      playerRef.current.setVolume(volume);
-                      markActivity();
-                    }}
+                    onReady={onPlayerReady}
                     onStateChange={onPlayerStateChange}
                     onEnd={handleVideoEnd}
                   />
@@ -816,32 +893,31 @@ function App() {
                 )}
 
                 {activeTab === 'theme' && (
-  <>
-    <label style={{ display: 'block', margin: '10px 0 6px' }}>Theme</label>
-    <select
-      value={theme}
-      onChange={e => setTheme(e.target.value)}
-      style={{ display: 'block', width: '100%', padding: '8px', marginBottom: '12px' }}
-    >
-      <option value="light">Light</option>
-      <option value="dark">Dark</option>
-      <option value="dracula">Dracula</option>
-      <option value="nord">Nord</option>
-      <option value="solarized">Solarized</option>
-      <option value="synthwave">Synthwave</option>
-      <option value="sepia">Sepia</option>
-      <option value="high-contrast">High Contrast</option>
-    </select>
+                  <>
+                    <label style={{ display: 'block', margin: '10px 0 6px' }}>Theme</label>
+                    <select
+                      value={theme}
+                      onChange={e => setTheme(e.target.value)}
+                      style={{ display: 'block', width: '100%', padding: '8px', marginBottom: '12px' }}
+                    >
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                      <option value="dracula">Dracula</option>
+                      <option value="nord">Nord</option>
+                      <option value="solarized">Solarized</option>
+                      <option value="synthwave">Synthwave</option>
+                      <option value="sepia">Sepia</option>
+                      <option value="high-contrast">High Contrast</option>
+                    </select>
 
-    <button
-      onClick={() => setLowPowerMode(l => !l)}
-      style={{ display: 'block', margin: '10px 0' }}
-    >
-      {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
-    </button>
-  </>
-)}
-
+                    <button
+                      onClick={() => setLowPowerMode(l => !l)}
+                      style={{ display: 'block', margin: '10px 0' }}
+                    >
+                      {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
