@@ -3,6 +3,40 @@ import YouTube from 'react-youtube';
 import './App.css';
 import './theme.css';
 
+/** ErrorBoundary: shows render errors instead of a blank screen */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, info: null };
+  }
+  static getDerivedStateFromError(err) {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    this.setState({ error, info });
+    console.error('[ErrorBoundary] Render error:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 16, background: '#fff5f5', color: '#b00020', border: '1px solid #ffcdd2', borderRadius: 8 }}>
+          <h3 style={{ marginTop: 0 }}>Something broke while rendering</h3>
+          <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+            {String(this.state.error)}
+          </div>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null, info: null })}
+            style={{ marginTop: 12 }}
+          >
+            Try to render anyway
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   // ===== Config =====
   const CLIENT_ID = '53619685564-bbu592j78l7ir1unr3v5orbvc7ri1eu5.apps.googleusercontent.com';
@@ -39,7 +73,7 @@ function App() {
   const [loopWindow, setLoopWindow] = useState(true); // show only next 10 from current
   const [searchQuery, setSearchQuery] = useState(''); // single source of truth
 
-  // NEW: "Load more" limit for full list mode (+10 each click)
+  // "Load more" limit for full list mode (+10 each click)
   const [fullLimit, setFullLimit] = useState(10);
 
   const playerRef = useRef(null);
@@ -403,6 +437,22 @@ function App() {
     if (currentVideoId) markActivity();
   }, [currentVideoId]);
 
+  /** DEV helper: throw on malformed items so we can see exactly which one breaks */
+  const validateVideo = (v, i) => {
+    if (!v || !v.snippet) {
+      console.error('[validateVideo] Missing snippet at index', i, v);
+      throw new Error(`Bad video at index ${i}: missing snippet`);
+    }
+    if (!v.snippet.resourceId || !v.snippet.resourceId.videoId) {
+      console.error('[validateVideo] Missing resourceId.videoId at index', i, v);
+      throw new Error(`Bad video at index ${i}: missing resourceId.videoId`);
+    }
+    if (!v.snippet.thumbnails || !v.snippet.thumbnails.default || !v.snippet.thumbnails.default.url) {
+      console.error('[validateVideo] Missing thumbnails.default.url at index', i, v);
+      throw new Error(`Bad video at index ${i}: missing thumbnails.default.url`);
+    }
+  };
+
   return (
     <div className={`app-container ${theme}`} style={{ display: 'flex' }}>
       {/* Main content */}
@@ -457,20 +507,22 @@ function App() {
               </button>
             )}
 
-            {/* YouTube player */}
-            {(!isIOS || iosPrompted || !autoPlay) && currentVideoId && (
-              <YouTube
-                videoId={currentVideoId}
-                opts={{ playerVars: { autoplay: 1, controls: 1 } }}
-                onReady={e => {
-                  playerRef.current = e.target;
-                  playerRef.current.setVolume(volume);
-                  markActivity();
-                }}
-                onStateChange={onPlayerStateChange}
-                onEnd={handleVideoEnd}
-              />
-            )}
+            {/* YouTube player (in boundary) */}
+            <ErrorBoundary>
+              {(!isIOS || iosPrompted || !autoPlay) && currentVideoId && (
+                <YouTube
+                  videoId={currentVideoId}
+                  opts={{ playerVars: { autoplay: 1, controls: 1 } }}
+                  onReady={e => {
+                    playerRef.current = e.target;
+                    playerRef.current.setVolume(volume);
+                    markActivity();
+                  }}
+                  onStateChange={onPlayerStateChange}
+                  onEnd={handleVideoEnd}
+                />
+              )}
+            </ErrorBoundary>
 
             {/* Controls */}
             <div style={{ margin: '10px 0' }}>
@@ -531,7 +583,7 @@ function App() {
                 type="text"
                 placeholder="Search videos…"
                 value={searchQuery}
-                onChange={e => setSearchQuerySafe(e.target.value)}
+                onChange={e => { setSearchQuery(e.target.value); markActivity(); }}
                 style={{ margin: '0 10px' }}
               />
               <button onClick={() => { setShowFavorites(f => !f); markActivity(); }}>
@@ -546,60 +598,66 @@ function App() {
               </button>
             </div>
 
-            {/* Video list (no extra safeties; as-is access) */}
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {displayList.map((v, i) => {
-                const id = v.snippet.resourceId.videoId;
-                const played = !!personalViews[id];
-                return (
-                  <li
-                    key={id + '-' + i}
-                    onClick={() => handleVideoClick(i)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '10px',
-                      cursor: 'pointer',
-                      opacity: played ? 0.75 : 1
-                    }}
-                  >
-                    <span style={{ marginRight: '8px' }}>{i + 1}.</span>
-                    <img
-                      src={v.snippet.thumbnails.default.url}
-                      alt="thumb"
-                      style={{ width: 80, height: 80, marginRight: 10, objectFit: 'cover' }}
-                      loading="lazy"
-                    />
-                    <div style={{ flex: 1, textAlign: 'left' }}>
-                      <strong>{v.snippet.title}</strong>
-                      <div>Views: {personalViews[id] || 0}</div>
-                    </div>
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        setFavorites(f =>
-                          f.includes(id) ? f.filter(x => x !== id) : [...f, id]
-                        );
-                        markActivity();
-                      }}
-                      style={{ fontSize: '1.2em' }}
-                      title={favorites.includes(id) ? 'Unfavorite' : 'Favorite'}
-                    >
-                      {favorites.includes(id) ? '★' : '☆'}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            {/* Video list inside ErrorBoundary; will show what broke */}
+            <ErrorBoundary key={`list-${loopWindow ? 'win' : 'full'}-${fullLimit}`}>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {displayList.map((v, i) => {
+                  // Throw if malformed so we can see where it dies:
+                  validateVideo(v, i);
 
-            {/* Bottom-right Load more (only in Full List mode and when more exist) */}
-            {!loopWindow && fullLimit < orderedFiltered.length && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-                <button onClick={() => setFullLimit(l => l + 10)}>
-                  Load more (+10)
-                </button>
-              </div>
-            )}
+                  const id = v.snippet.resourceId.videoId;
+                  const played = !!personalViews[id];
+
+                  return (
+                    <li
+                      key={id + '-' + i}
+                      onClick={() => handleVideoClick(i)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '10px',
+                        cursor: 'pointer',
+                        opacity: played ? 0.75 : 1
+                      }}
+                    >
+                      <span style={{ marginRight: '8px' }}>{i + 1}.</span>
+                      <img
+                        src={v.snippet.thumbnails.default.url}
+                        alt="thumb"
+                        style={{ width: 80, height: 80, marginRight: 10, objectFit: 'cover' }}
+                        loading="lazy"
+                      />
+                      <div style={{ flex: 1, textAlign: 'left' }}>
+                        <strong>{v.snippet.title}</strong>
+                        <div>Views: {personalViews[id] || 0}</div>
+                      </div>
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          setFavorites(f =>
+                            f.includes(id) ? f.filter(x => x !== id) : [...f, id]
+                          );
+                          markActivity();
+                        }}
+                        style={{ fontSize: '1.2em' }}
+                        title={favorites.includes(id) ? 'Unfavorite' : 'Favorite'}
+                      >
+                        {favorites.includes(id) ? '★' : '☆'}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/* Bottom-right Load more (only in Full List mode and when more exist) */}
+              {!loopWindow && fullLimit < orderedFiltered.length && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+                  <button onClick={() => setFullLimit(l => l + 10)}>
+                    Load more (+10)
+                  </button>
+                </div>
+              )}
+            </ErrorBoundary>
           </div>
         ) : (
           // Playlist selection
