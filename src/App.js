@@ -437,7 +437,7 @@ function App() {
     if (currentVideoId) markActivity();
   }, [currentVideoId]);
 
-  // === BrandBar (sticky top-left logo on every page) ===
+  // === BrandBar (sticky top-left logo — hidden on login) ===
   const goHome = () => {
     setSelectedPlaylist(null);
     setPlaylistVideos([]);
@@ -459,8 +459,8 @@ function App() {
           width: '100%',
           display: 'flex',
           alignItems: 'center',
-          gap: 14,                 // slightly larger gap
-          padding: '10px 14px',    // slightly more padding
+          gap: 14,
+          padding: '10px 14px',
           background: headerBg,
           color: headerFg,
           borderBottom: theme === 'dark' ? '1px solid #222' : '1px solid #eee'
@@ -469,7 +469,7 @@ function App() {
         <img
           src="/ytps-logo.png"
           alt="YouTube Playlist Sorter"
-          width={40}              // bigger sticky logo
+          width={40}
           height={40}
           style={{ borderRadius: 8, cursor: 'pointer' }}
           onClick={goHome}
@@ -494,7 +494,8 @@ function App() {
 
   return (
     <>
-      <BrandBar />
+      {/* Show sticky header only after login */}
+      {isLoggedIn && <BrandBar />}
 
       <div className={`app-container ${theme}`} style={{ display: 'flex' }}>
         {/* Main content */}
@@ -506,19 +507,15 @@ function App() {
           alignItems: 'center'
         }}>
           {!isLoggedIn ? (
-            // Login screen
+            // Login screen — logo above button, no extra title text
             <div style={{ marginTop: '10vh', textAlign: 'center' }}>
               <img
                 src="/ytps-logo.png"
                 alt="YouTube Playlist Sorter logo"
-                width={96}
-                height={96}
-                style={{ display: 'block', margin: '0 auto 12px', borderRadius: 16 }}
+                width={120}
+                height={120}
+                style={{ display: 'block', margin: '0 auto 16px', borderRadius: 16 }}
               />
-              <h1 style={{ fontSize: '2em', marginBottom: '1em' }}>
-                YouTube Playlist Sorter
-              </h1>
-
               <button
                 onClick={handleLogin}
                 style={{ fontSize: '1.2em', padding: '10px 20px' }}
