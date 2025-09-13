@@ -3,13 +3,13 @@ import YouTube from 'react-youtube';
 import './App.css';
 import './theme.css';
 
-/** ErrorBoundary: shows render errors instead of a blank screen */
+/** Optional: ErrorBoundary to show render errors instead of a blank screen */
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null, info: null };
   }
-  static getDerivedStateFromError(err) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
   componentDidCatch(error, info) {
@@ -86,7 +86,7 @@ function App() {
   // OAuth CSRF state
   const STATE_KEY = 'oauth_state';
   const randomState = () =>
-    Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
 
@@ -437,331 +437,382 @@ function App() {
     if (currentVideoId) markActivity();
   }, [currentVideoId]);
 
-  /** DEV helper: throw on malformed items so we can see exactly which one breaks */
-  const validateVideo = (v, i) => {
-    if (!v || !v.snippet) {
-      console.error('[validateVideo] Missing snippet at index', i, v);
-      throw new Error(`Bad video at index ${i}: missing snippet`);
-    }
-    if (!v.snippet.resourceId || !v.snippet.resourceId.videoId) {
-      console.error('[validateVideo] Missing resourceId.videoId at index', i, v);
-      throw new Error(`Bad video at index ${i}: missing resourceId.videoId`);
-    }
-    if (!v.snippet.thumbnails || !v.snippet.thumbnails.default || !v.snippet.thumbnails.default.url) {
-      console.error('[validateVideo] Missing thumbnails.default.url at index', i, v);
-      throw new Error(`Bad video at index ${i}: missing thumbnails.default.url`);
-    }
+  // === BrandBar (sticky top-left logo on every page) ===
+  const goHome = () => {
+    setSelectedPlaylist(null);
+    setPlaylistVideos([]);
+    setAllPlaylistVideos([]);
+    setCurrentIndex(null);
+    setCurrentVideoId(null);
+    setIosPrompted(false);
+  };
+
+  const BrandBar = () => {
+    const headerBg = theme === 'dark' ? '#111' : '#fff';
+    const headerFg = theme === 'dark' ? '#fff' : '#111';
+    return (
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 1000,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '8px 12px',
+          background: headerBg,
+          color: headerFg,
+          borderBottom: theme === 'dark' ? '1px solid #222' : '1px solid #eee'
+        }}
+      >
+        <img
+          src="/ytps-logo.png"
+          alt="YouTube Playlist Sorter"
+          width={28}
+          height={28}
+          style={{ borderRadius: 6, cursor: 'pointer' }}
+          onClick={goHome}
+        />
+        <button
+          onClick={goHome}
+          style={{
+            background: 'transparent',
+            border: 0,
+            color: headerFg,
+            fontWeight: 600,
+            letterSpacing: 0.2,
+            cursor: 'pointer'
+          }}
+          title="Go to Playlists"
+        >
+          YouTube Playlist Sorter
+        </button>
+      </div>
+    );
   };
 
   return (
-    <div className={`app-container ${theme}`} style={{ display: 'flex' }}>
-      {/* Main content */}
-      <div style={{
-        flex: 1,
-        textAlign: 'center',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center'
-      }}>
-        {!isLoggedIn ? (
-          // Login screen
-          <div style={{ marginTop: '20vh' }}>
-            <h1 style={{ fontSize: '2em', marginBottom: '1em' }}>
-              YouTube Playlist Sorter
-            </h1>
-            <button
-              onClick={handleLogin}
-              style={{ fontSize: '1.2em', padding: '10px 20px' }}
-            >
-              Log in with Google
-            </button>
-            <p>
-              <a href="/privacy.html">Privacy Policy</a> |{' '}
-              <a href="/terms.html">Terms and Conditions</a>
-            </p>
-          </div>
-        ) : selectedPlaylist ? (
-          // Video player + list view
-          <div style={{ width: '100%', maxWidth: '900px' }}>
-            <button onClick={() => {
-              setSelectedPlaylist(null);
-              setPlaylistVideos([]);
-              setAllPlaylistVideos([]);
-              setCurrentIndex(null);
-              setCurrentVideoId(null);
-            }}>
-              ← Back to Playlists
-            </button>
-            <h2>{selectedPlaylist.snippet.title}</h2>
+    <>
+      <BrandBar />
 
-            {/* iOS autoplay prompt */}
-            {!iosPrompted && isIOS && autoPlay && displayList.length > 0 && (
+      <div className={`app-container ${theme}`} style={{ display: 'flex' }}>
+        {/* Main content */}
+        <div style={{
+          flex: 1,
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}>
+          {!isLoggedIn ? (
+            // Login screen
+            <div style={{ marginTop: '10vh', textAlign: 'center' }}>
+              <img
+                src="/ytps-logo.png"
+                alt="YouTube Playlist Sorter logo"
+                width={96}
+                height={96}
+                style={{ display: 'block', margin: '0 auto 12px', borderRadius: 16 }}
+              />
+              <h1 style={{ fontSize: '2em', marginBottom: '1em' }}>
+                YouTube Playlist Sorter
+              </h1>
+
               <button
-                onClick={() => {
-                  setIosPrompted(true);
-                  setCurrentVideoId(displayList[0].snippet.resourceId.videoId);
-                }}
-                style={{ margin: '1em 0' }}
+                onClick={handleLogin}
+                style={{ fontSize: '1.2em', padding: '10px 20px' }}
               >
-                ▶ Start Watching
+                Log in with Google
               </button>
-            )}
 
-            {/* YouTube player (in boundary) */}
-            <ErrorBoundary>
-              {(!isIOS || iosPrompted || !autoPlay) && currentVideoId && (
-                <YouTube
-                  videoId={currentVideoId}
-                  opts={{ playerVars: { autoplay: 1, controls: 1 } }}
-                  onReady={e => {
-                    playerRef.current = e.target;
-                    playerRef.current.setVolume(volume);
+              <p style={{ marginTop: '12px' }}>
+                <a href="/privacy.html">Privacy Policy</a> |{' '}
+                <a href="/terms.html">Terms and Conditions</a>
+              </p>
+            </div>
+          ) : selectedPlaylist ? (
+            // Video player + list view
+            <div style={{ width: '100%', maxWidth: '900px' }}>
+              <button onClick={goHome}>
+                ← Back to Playlists
+              </button>
+              <h2>{selectedPlaylist.snippet.title}</h2>
+
+              {/* iOS autoplay prompt */}
+              {!iosPrompted && isIOS && autoPlay && displayList.length > 0 && (
+                <button
+                  onClick={() => {
+                    setIosPrompted(true);
+                    setCurrentVideoId(displayList[0].snippet.resourceId.videoId);
+                  }}
+                  style={{ margin: '1em 0' }}
+                >
+                  ▶ Start Watching
+                </button>
+              )}
+
+              {/* YouTube player (wrapped in boundary) */}
+              <ErrorBoundary>
+                {(!isIOS || iosPrompted || !autoPlay) && currentVideoId && (
+                  <YouTube
+                    videoId={currentVideoId}
+                    opts={{ playerVars: { autoplay: 1, controls: 1 } }}
+                    onReady={e => {
+                      playerRef.current = e.target;
+                      playerRef.current.setVolume(volume);
+                      markActivity();
+                    }}
+                    onStateChange={onPlayerStateChange}
+                    onEnd={handleVideoEnd}
+                  />
+                )}
+              </ErrorBoundary>
+
+              {/* Controls */}
+              <div style={{ margin: '10px 0' }}>
+                <button onClick={goPrev}>Previous</button>
+                <button onClick={goNext} style={{ marginLeft: '10px' }}>
+                  Next
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={e => {
+                    const v = +e.target.value;
+                    setVolume(v);
+                    if (playerRef.current) playerRef.current.setVolume(v);
                     markActivity();
                   }}
-                  onStateChange={onPlayerStateChange}
-                  onEnd={handleVideoEnd}
+                  style={{ marginLeft: '10px' }}
                 />
-              )}
-            </ErrorBoundary>
+              </div>
 
-            {/* Controls */}
-            <div style={{ margin: '10px 0' }}>
-              <button onClick={goPrev}>Previous</button>
-              <button onClick={goNext} style={{ marginLeft: '10px' }}>
-                Next
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={e => {
-                  const v = +e.target.value;
-                  setVolume(v);
-                  if (playerRef.current) playerRef.current.setVolume(v);
-                  markActivity();
-                }}
-                style={{ marginLeft: '10px' }}
-              />
-            </div>
-
-            {/* Filters & sorting with Shuffle */}
-            <div style={{ margin: '1em 0' }}>
-              <label>Sort by: </label>
-              <select
-                value={sortType}
-                onChange={e => {
-                  setSortType(e.target.value);
-                  setPlaylistVideos(sortVideos(allPlaylistVideos, e.target.value, sortDirection));
-                  markActivity();
-                }}
-              >
-                <option value="">None</option>
-                <option value="title">Title</option>
-                <option value="views">Personal Views</option>
-                <option value="dateAdded">Date Added</option>
-                <option value="datePublished">Date Published</option>
-              </select>
-              <button
-                onClick={() => {
-                  setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
-                  setPlaylistVideos(sortVideos(
-                    allPlaylistVideos,
-                    sortType,
-                    sortDirection === 'asc' ? 'desc' : 'asc'
-                  ));
-                  markActivity();
-                }}
-                style={{ marginLeft: '10px' }}
-              >
-                {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
-              </button>
-              <button onClick={() => { handleShuffle(); markActivity(); }} style={{ marginLeft: '10px' }}>
-                Shuffle
-              </button>
-              <input
-                type="text"
-                placeholder="Search videos…"
-                value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); markActivity(); }}
-                style={{ margin: '0 10px' }}
-              />
-              <button onClick={() => { setShowFavorites(f => !f); markActivity(); }}>
-                {showFavorites ? 'Show All' : 'Show Favorites'}
-              </button>
-              <button
-                onClick={() => { setLoopWindow(w => !w); markActivity(); }}
-                style={{ marginLeft: '10px' }}
-                title="When enabled: shows only the next 10 videos, unplayed first, loops on end."
-              >
-                {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
-              </button>
-            </div>
-
-            {/* Video list inside ErrorBoundary; will show what broke */}
-            <ErrorBoundary key={`list-${loopWindow ? 'win' : 'full'}-${fullLimit}`}>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {displayList.map((v, i) => {
-                  // Throw if malformed so we can see where it dies:
-                  validateVideo(v, i);
-
-                  const id = v.snippet.resourceId.videoId;
-                  const played = !!personalViews[id];
-
-                  return (
-                    <li
-                      key={id + '-' + i}
-                      onClick={() => handleVideoClick(i)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '10px',
-                        cursor: 'pointer',
-                        opacity: played ? 0.75 : 1
-                      }}
-                    >
-                      <span style={{ marginRight: '8px' }}>{i + 1}.</span>
-                      <img
-                        src={v.snippet.thumbnails.default.url}
-                        alt="thumb"
-                        style={{ width: 80, height: 80, marginRight: 10, objectFit: 'cover' }}
-                        loading="lazy"
-                      />
-                      <div style={{ flex: 1, textAlign: 'left' }}>
-                        <strong>{v.snippet.title}</strong>
-                        <div>Views: {personalViews[id] || 0}</div>
-                      </div>
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          setFavorites(f =>
-                            f.includes(id) ? f.filter(x => x !== id) : [...f, id]
-                          );
-                          markActivity();
-                        }}
-                        style={{ fontSize: '1.2em' }}
-                        title={favorites.includes(id) ? 'Unfavorite' : 'Favorite'}
-                      >
-                        {favorites.includes(id) ? '★' : '☆'}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {/* Bottom-right Load more (only in Full List mode and when more exist) */}
-              {!loopWindow && fullLimit < orderedFiltered.length && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-                  <button onClick={() => setFullLimit(l => l + 10)}>
-                    Load more (+10)
-                  </button>
-                </div>
-              )}
-            </ErrorBoundary>
-          </div>
-        ) : (
-          // Playlist selection
-          <>
-            <button onClick={handleLogout} style={{ margin: '1em 0' }}>
-              Log Out
-            </button>
-            <ul style={{ listStyle: 'none', padding: 0, marginTop: '5vh' }}>
-              {playlists.map(pl => (
-                <li
-                  key={pl.id}
-                  onClick={() => fetchPlaylistVideos(pl).catch(console.error)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    marginBottom: '1.5em'
+              {/* Filters & sorting with Shuffle */}
+              <div style={{ margin: '1em 0' }}>
+                <label>Sort by: </label>
+                <select
+                  value={sortType}
+                  onChange={e => {
+                    setSortType(e.target.value);
+                    setPlaylistVideos(sortVideos(allPlaylistVideos, e.target.value, sortDirection));
+                    markActivity();
                   }}
                 >
-                  <div style={{ position: 'relative', display: 'inline-block' }}>
-                    <img
-                      src={pl.snippet.thumbnails.default.url}
-                      alt="thumbnail"
-                      style={{ width: '100px', height: '100px', marginRight: '10px' }}
-                    />
-                    <span style={{
-                      position: 'absolute', top: '5px', right: '5px',
-                      background: 'rgba(0,0,0,0.7)', color: '#fff',
-                      padding: '2px 5px', borderRadius: '3px', fontSize: '0.8em'
-                    }}>
-                      {pl.contentDetails.itemCount}
-                    </span>
-                  </div>
-                  <div style={{ flex: 1, textAlign: 'left' }}>
-                    <strong>{pl.snippet.title}</strong>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </div>
-
-      {/* Settings drawer */}
-      {isLoggedIn && (
-        <div style={{
-          width: '300px',
-          padding: '20px',
-          position: 'sticky',
-          top: '10vh'
-        }}>
-          <button
-            onClick={() => setShowSettings(s => !s)}
-            style={{ marginBottom: '10px' }}
-          >
-            ⚙️ Settings
-          </button>
-          {showSettings && (
-            <div className="settings">
-              <div className="tab-buttons">
-                <button onClick={() => setActiveTab('general')}>
-                  General
+                  <option value="">None</option>
+                  <option value="title">Title</option>
+                  <option value="views">Personal Views</option>
+                  <option value="dateAdded">Date Added</option>
+                  <option value="datePublished">Date Published</option>
+                </select>
+                <button
+                  onClick={() => {
+                    setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
+                    setPlaylistVideos(sortVideos(
+                      allPlaylistVideos,
+                      sortType,
+                      sortDirection === 'asc' ? 'desc' : 'asc'
+                    ));
+                    markActivity();
+                  }}
+                  style={{ marginLeft: '10px' }}
+                >
+                  {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
                 </button>
-                <button onClick={() => setActiveTab('theme')}>
-                  Theme
+                <button onClick={() => { handleShuffle(); markActivity(); }} style={{ marginLeft: '10px' }}>
+                  Shuffle
+                </button>
+                <input
+                  type="text"
+                  placeholder="Search videos…"
+                  value={searchQuery}
+                  onChange={e => setSearchQuerySafe(e.target.value)}
+                  style={{ margin: '0 10px' }}
+                />
+                <button onClick={() => { setShowFavorites(f => !f); markActivity(); }}>
+                  {showFavorites ? 'Show All' : 'Show Favorites'}
+                </button>
+                <button
+                  onClick={() => { setLoopWindow(w => !w); markActivity(); }}
+                  style={{ marginLeft: '10px' }}
+                  title="When enabled: shows only the next 10 videos, unplayed first, loops on end."
+                >
+                  {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
                 </button>
               </div>
-              {activeTab === 'general' && (
-                <>
-                  <button
-                    onClick={() => setAutoPlay(a => !a)}
-                    style={{ display: 'block', margin: '10px 0' }}
-                  >
-                    {autoPlay ? 'Disable Autoplay' : 'Enable Autoplay'}
-                  </button>
-                  <button
-                    onClick={() => setLoopWindow(w => !w)}
-                    style={{ display: 'block', margin: '10px 0' }}
-                  >
-                    {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
-                  </button>
-                </>
-              )}
-              {activeTab === 'theme' && (
-                <>
-                  <button
-                    onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-                    style={{ display: 'block', margin: '10px 0' }}
-                  >
-                    {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
-                  </button>
-                  <button
-                    onClick={() => setLowPowerMode(l => !l)}
-                    style={{ display: 'block', margin: '10px 0' }}
-                  >
-                    {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
-                  </button>
-                </>
-              )}
+
+              {/* Video list */}
+              <ErrorBoundary key={`list-${loopWindow ? 'win' : 'full'}-${fullLimit}`}>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  {displayList.map((v, i) => {
+                    const id = v.snippet.resourceId.videoId;
+                    const played = !!personalViews[id];
+                    return (
+                      <li
+                        key={id + '-' + i}
+                        onClick={() => handleVideoClick(i)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '10px',
+                          cursor: 'pointer',
+                          opacity: played ? 0.75 : 1
+                        }}
+                      >
+                        <span style={{ marginRight: '8px' }}>{i + 1}.</span>
+                        <img
+                          src={v.snippet.thumbnails.default.url}
+                          alt="thumb"
+                          style={{ width: 80, height: 80, marginRight: 10, objectFit: 'cover' }}
+                          loading="lazy"
+                        />
+                        <div style={{ flex: 1, textAlign: 'left' }}>
+                          <strong>{v.snippet.title}</strong>
+                          <div>Views: {personalViews[id] || 0}</div>
+                        </div>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            setFavorites(f =>
+                              f.includes(id) ? f.filter(x => x !== id) : [...f, id]
+                            );
+                            markActivity();
+                          }}
+                          style={{ fontSize: '1.2em' }}
+                          title={favorites.includes(id) ? 'Unfavorite' : 'Favorite'}
+                        >
+                          {favorites.includes(id) ? '★' : '☆'}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {/* Bottom-right Load more (only in Full List mode and when more exist) */}
+                {!loopWindow && fullLimit < orderedFiltered.length && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+                    <button onClick={() => setFullLimit(l => l + 10)}>
+                      Load more (+10)
+                    </button>
+                  </div>
+                )}
+              </ErrorBoundary>
             </div>
+          ) : (
+            // Playlist selection
+            <>
+              <button onClick={handleLogout} style={{ margin: '1em 0' }}>
+                Log Out
+              </button>
+              <ul style={{ listStyle: 'none', padding: 0, marginTop: '5vh' }}>
+                {playlists.map(pl => (
+                  <li
+                    key={pl.id}
+                    onClick={() => fetchPlaylistVideos(pl).catch(console.error)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      marginBottom: '1.5em'
+                    }}
+                  >
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img
+                        src={pl.snippet.thumbnails.default.url}
+                        alt="thumbnail"
+                        style={{ width: '100px', height: '100px', marginRight: '10px' }}
+                      />
+                      <span style={{
+                        position: 'absolute', top: '5px', right: '5px',
+                        background: 'rgba(0,0,0,0.7)', color: '#fff',
+                        padding: '2px 5px', borderRadius: '3px', fontSize: '0.8em'
+                      }}>
+                        {pl.contentDetails.itemCount}
+                      </span>
+                    </div>
+                    <div style={{ flex: 1, textAlign: 'left' }}>
+                      <strong>{pl.snippet.title}</strong>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
-      )}
-    </div>
+
+        {/* Settings drawer */}
+        {isLoggedIn && (
+          <div style={{
+            width: '300px',
+            padding: '20px',
+            position: 'sticky',
+            top: '10vh'
+          }}>
+            <button
+              onClick={() => setShowSettings(s => !s)}
+              style={{ marginBottom: '10px' }}
+            >
+              ⚙️ Settings
+            </button>
+            {showSettings && (
+              <div className="settings">
+                <div className="tab-buttons">
+                  <button onClick={() => setActiveTab('general')}>
+                    General
+                  </button>
+                  <button onClick={() => setActiveTab('theme')}>
+                    Theme
+                  </button>
+                </div>
+                {activeTab === 'general' && (
+                  <>
+                    <button
+                      onClick={() => setAutoPlay(a => !a)}
+                      style={{ display: 'block', margin: '10px 0' }}
+                    >
+                      {autoPlay ? 'Disable Autoplay' : 'Enable Autoplay'}
+                    </button>
+                    <button
+                      onClick={() => setLoopWindow(w => !w)}
+                      style={{ display: 'block', margin: '10px 0' }}
+                    >
+                      {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPersonalViews({});
+                        localStorage.removeItem('personalViews');
+                      }}
+                      style={{ display: 'block', margin: '10px 0' }}
+                    >
+                      Reset Personal Views
+                    </button>
+                  </>
+                )}
+                {activeTab === 'theme' && (
+                  <>
+                    <button
+                      onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+                      style={{ display: 'block', margin: '10px 0' }}
+                    >
+                      {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
+                    </button>
+                    <button
+                      onClick={() => setLowPowerMode(l => !l)}
+                      style={{ display: 'block', margin: '10px 0' }}
+                    >
+                      {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
