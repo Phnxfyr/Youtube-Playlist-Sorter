@@ -2,54 +2,96 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Privacy Policy</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 2rem;
-      max-width: 800px;
-    }
-    h1 {
-      font-size: 1.8rem;
-    }
-    h2 {
-      margin-top: 2rem;
-    }
-    p {
-      line-height: 1.6;
-    }
+    body { font-family: Arial, sans-serif; margin: 2rem; max-width: 800px; }
+    h1 { font-size: 1.8rem; }
+    h2 { margin-top: 2rem; }
+    p, li { line-height: 1.6; }
+    .note { background:#f7f7f7; border:1px solid #e5e5e5; padding:12px; border-radius:8px; }
   </style>
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p>Last updated: May 28, 2025</p>
+  <p><strong>Last updated:</strong> May 28, 2025</p>
 
-  <p>This application uses the YouTube Data API to retrieve and display user playlist information. By using this application, you agree to be bound by the <a href="https://www.youtube.com/t/terms" target="_blank">YouTube Terms of Service</a> and the <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a>.</p>
-
-  <h2>Information Collection and Use</h2>
   <p>
-    We do not store any personal information on our servers. Any access tokens retrieved from your Google account are used only for the current session and are not saved or transmitted elsewhere.
-    Your personal view counts are saved locally on your device through browser localStorage and are not transmitted or stored externally.
+    YouTube Playlist Sorter (“the App”) uses the <strong>YouTube Data API</strong> to retrieve and display your playlists and videos.
+    By using the App you agree to be bound by the
+    <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms of Service</a>
+    and the
+    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.
   </p>
 
-  <h2>Third-Party Services</h2>
-  <p>This app integrates with the following third-party services:</p>
+  <h2>Information We Collect</h2>
   <ul>
-    <li>Google APIs (OAuth, YouTube Data API)</li>
-    <li>Google AdSense (for displaying relevant advertisements)</li>
+    <li><strong>Google OAuth tokens</strong>: Used only in your current browser session to call the YouTube Data API. We do <em>not</em> send these tokens to any server we control, and we do <em>not</em> store them after the session ends.</li>
+    <li><strong>Local storage (on your device)</strong>: We store lightweight preferences such as theme/low-power mode, favorites, and your personal view counters via your browser’s localStorage. This data never leaves your device unless you choose to sync/backup your browser profile.</li>
   </ul>
-  <p>These services may collect data in accordance with their own privacy policies. Please review those policies to understand how your information is handled.</p>
 
-  <h2>Cookies and Tracking</h2>
-  <p>This app does not use cookies or track users outside of the localStorage data required for user functionality like saving theme preferences or view counts.</p>
+  <h2>How We Use Information</h2>
+  <ul>
+    <li>To list and sort your YouTube playlists/videos you select.</li>
+    <li>To remember local preferences and counters via localStorage.</li>
+    <li>If enabled, to display advertisements (see “Ads & Cookies” below).</li>
+  </ul>
 
-  <h2>Your Choices</h2>
+  <h2>Third-Party Services</h2>
+  <ul>
+    <li><strong>Google APIs</strong> (OAuth 2.0, YouTube Data API)</li>
+    <li><strong>Google AdSense</strong> (for displaying advertisements, if enabled)</li>
+  </ul>
   <p>
-    You can clear personal views or logout/switch accounts using the settings menu in the app. Clearing your browser data will also remove stored information.
+    These services may process data in accordance with their own policies. Please review
+    the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>
+    and the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms of Service</a>.
+  </p>
+
+  <h2>Ads & Cookies (AdSense)</h2>
+  <p class="note">
+    If ads are enabled on your version of the App:
+    third-party vendors, including Google, use cookies to serve ads based on your prior visits to this and/or other websites.
+    Google’s advertising cookies enable Google and its partners to serve ads based on your visits to this site and/or other sites on the Internet.
+  </p>
+  <ul>
+    <li>Manage your ad personalization in <a href="https://adssettings.google.com/" target="_blank" rel="noopener">Google Ads Settings</a>.</li>
+    <li>Learn more about how Google uses data in ads: <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener">About Google Ads</a>.</li>
+    <li>Some partners may also set cookies. Your browser settings and (where applicable) a consent banner let you control these choices.</li>
+  </ul>
+  <p>
+    Aside from AdSense (if enabled), the App itself does <strong>not</strong> set tracking cookies. It uses only localStorage for on-device preferences.
+  </p>
+
+  <h2>Your Choices & Data Deletion</h2>
+  <ul>
+    <li><strong>Revoke access:</strong> You can revoke the App’s access to your Google account at any time via
+      <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account &rarr; Security &rarr; Third-party access</a>.
+    </li>
+    <li><strong>Clear local data:</strong> Use the in-app “Reset Personal Views”/logout, or clear your browser’s site data to remove locally stored preferences.</li>
+    <li><strong>Logout/Switch accounts:</strong> Use the in-app logout to end the session and return to the sign-in screen.</li>
+  </ul>
+
+  <h2>EEA/UK Users (Legal Bases)</h2>
+  <p>
+    Where applicable under GDPR/UK GDPR:
+    OAuth tokens are processed on the basis of <em>performance of a contract</em> (to provide requested features).
+    Ad personalization (if enabled) is processed on the basis of <em>consent</em> via a consent banner. Non-personalized ads may be shown where required.
+  </p>
+
+  <h2>Children’s Privacy</h2>
+  <p>
+    The App is not directed to children under 13 (or the minimum age in your jurisdiction). If you believe a child has used the App, please contact us for guidance on removing local data.
+  </p>
+
+  <h2>Changes to This Policy</h2>
+  <p>
+    We may update this policy from time to time. Material updates will be reflected by the “Last updated” date above.
   </p>
 
   <h2>Contact Us</h2>
-  <p>If you have any questions about this Privacy Policy, please contact the developer at: [phnxfyr2000@gmail.com]</p>
+  <p>
+    Questions? Email: <a href="mailto:phnxfyr12@gmail.com">phnxfyr12@gmail.com</a>
+  </p>
 </body>
 </html>
