@@ -1,56 +1,259 @@
-/* theme.css */
+/* ===== theme.css (multi-theme + compatible with your current classes) ===== */
 
-body.light {
-  background-color: white;
-  color: black;
+/* ---- Defaults (will be overridden by body.<theme> below) ---- */
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #666666;
+
+  --card: #ffffff;
+  --border: #e0e0e0;
+
+  --ui-bg: #f0f0f0;
+  --ui-fg: #111111;
+  --ui-border: #cccccc;
+
+  --header-bg: var(--bg);
+  --header-fg: var(--fg);
+  --header-border: var(--border);
+
+  --accent: #d9251d;
+  --accent-contrast: #ffffff;
+
+  --shadow: 0 2px 10px rgba(0,0,0,0.06);
 }
 
-body.dark {
-  background-color: #121212;
-  color: white;
+/* Base */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.app-container.dark button,
-.app-container.dark input {
-  background-color: #333;
-  color: white;
-  border: 1px solid #555;
+/* Links */
+a { color: var(--accent); }
+a:hover { opacity: 0.9; }
+
+/* Generic controls (works regardless of .app-container having theme class) */
+.app-container button,
+.app-container input,
+.app-container select {
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.app-container button:hover {
+  box-shadow: var(--shadow);
 }
 
-.app-container.light button,
-.app-container.light input {
-  background-color: #f0f0f0;
-  color: black;
-  border: 1px solid #ccc;
-}
-
+/* Settings drawer + tabs pick up theme variables */
 .settings-drawer {
-  background-color: inherit;
+  background: inherit;
   color: inherit;
   transition: transform 0.3s ease;
 }
-
-.settings-drawer.open {
-  transform: translateX(0);
-}
+.settings-drawer.open { transform: translateX(0); }
 
 .tab-buttons button {
   margin: 0.5em;
   padding: 0.5em 1em;
   border-radius: 5px;
+  border: 1px solid var(--ui-border);
+  background: var(--card);
+  color: var(--fg);
 }
 
+/* ----- THEMES (apply via body class, e.g., <body class="dark">) ----- */
+
+/* Light */
+body.light {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #666666;
+
+  --card: #ffffff;
+  --border: #eaeaea;
+
+  --ui-bg: #f0f0f0;
+  --ui-fg: #111111;
+  --ui-border: #cccccc;
+
+  --header-bg: #ffffff;
+  --header-fg: #111111;
+  --header-border: #eeeeee;
+
+  --accent: #d9251d;
+  --accent-contrast: #ffffff;
+}
+
+/* Dark */
+body.dark {
+  --bg: #121212;
+  --fg: #e8e9ee;
+  --muted: #a6a8b5;
+
+  --card: #1a1b1f;
+  --border: #2a2d39;
+
+  --ui-bg: #333333;
+  --ui-fg: #ffffff;
+  --ui-border: #555555;
+
+  --header-bg: #0f1115;
+  --header-fg: #e8e9ee;
+  --header-border: #20232f;
+
+  --accent: #ff3b3b;
+  --accent-contrast: #111111;
+}
+
+/* Dracula */
+body.dracula {
+  --bg: #282a36;
+  --fg: #f8f8f2;
+  --muted: #bdc0c9;
+
+  --card: #2f3242;
+  --border: #3c3f51;
+
+  --ui-bg: #3a3d4e;
+  --ui-fg: #f8f8f2;
+  --ui-border: #545772;
+
+  --header-bg: #242637;
+  --header-fg: #f8f8f2;
+  --header-border: #3a3d4c;
+
+  --accent: #ff79c6;
+  --accent-contrast: #1b1d28;
+}
+
+/* Nord */
+body.nord {
+  --bg: #2e3440;
+  --fg: #e5e9f0;
+  --muted: #c0c8d7;
+
+  --card: #3b4252;
+  --border: #434c5e;
+
+  --ui-bg: #40485b;
+  --ui-fg: #e5e9f0;
+  --ui-border: #5b657a;
+
+  --header-bg: #2b313c;
+  --header-fg: #e5e9f0;
+  --header-border: #3f4757;
+
+  --accent: #88c0d0;
+  --accent-contrast: #1b212b;
+}
+
+/* Solarized (light) */
+body.solarized {
+  --bg: #fdf6e3;
+  --fg: #073642;
+  --muted: #657b83;
+
+  --card: #fffdf4;
+  --border: #eee8d5;
+
+  --ui-bg: #f3e9c8;
+  --ui-fg: #073642;
+  --ui-border: #e6ddbf;
+
+  --header-bg: #fbf2d6;
+  --header-fg: #073642;
+  --header-border: #efe6c8;
+
+  --accent: #b58900;
+  --accent-contrast: #fff7e0;
+}
+
+/* Synthwave */
+body.synthwave {
+  --bg: #1a1033;
+  --fg: #fcedff;
+  --muted: #d3b3ff;
+
+  --card: #231344;
+  --border: #382061;
+
+  --ui-bg: #2b1852;
+  --ui-fg: #fcedff;
+  --ui-border: #4a2d7a;
+
+  --header-bg: #1b1237;
+  --header-fg: #fcedff;
+  --header-border: #392062;
+
+  --accent: #ff5bd4;
+  --accent-contrast: #1a1033;
+}
+
+/* Sepia */
+body.sepia {
+  --bg: #f6efe2;
+  --fg: #3a2f28;
+  --muted: #6b5a4f;
+
+  --card: #fcf7ee;
+  --border: #e7dccc;
+
+  --ui-bg: #efe4d4;
+  --ui-fg: #3a2f28;
+  --ui-border: #ddcfbb;
+
+  --header-bg: #f3e8d7;
+  --header-fg: #3a2f28;
+  --header-border: #e6d7c3;
+
+  --accent: #b5672d;
+  --accent-contrast: #fff7ee;
+}
+
+/* High Contrast */
+body.high-contrast {
+  --bg: #000000;
+  --fg: #ffffff;
+  --muted: #e0e0e0;
+
+  --card: #000000;
+  --border: #ffffff;
+
+  --ui-bg: #000000;
+  --ui-fg: #ffffff;
+  --ui-border: #ffffff;
+
+  --header-bg: #000000;
+  --header-fg: #ffffff;
+  --header-border: #ffffff;
+
+  --accent: #00ffff;
+  --accent-contrast: #000000;
+}
+
+/* ----- Low Power mode (kept from your original) ----- */
 body.low-power {
   background-color: #000 !important;
   color: #999 !important;
   filter: brightness(85%);
 }
-
 body.low-power * {
   animation: none !important;
   transition: none !important;
+  box-shadow: none !important;
 }
+body.low-power img { opacity: 0.6; }
 
-body.low-power img {
-  opacity: 0.6;
-}
+/* ----- Back-compat with your original per-container rules ----- */
+/* These are harmless with the variable system but keep your old behavior intact */
+.app-container.dark button,
+.app-container.dark input { background-color: #333; color: #fff; border: 1px solid #555; }
+
+.app-container.light button,
+.app-container.light input { background-color: #f0f0f0; color: #000; border: 1px solid #ccc; }
