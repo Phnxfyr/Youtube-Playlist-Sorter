@@ -534,9 +534,7 @@ function App() {
           ) : selectedPlaylist ? (
             // Video player + list view
             <div style={{ width: '100%', maxWidth: '900px' }}>
-              <button onClick={goHome}>
-                ← Back to Playlists
-              </button>
+              {/* Removed the "Back to Playlists" button — use top-left logo/name */}
               <h2>{selectedPlaylist.snippet.title}</h2>
 
               {/* iOS autoplay prompt */}
@@ -703,9 +701,7 @@ function App() {
           ) : (
             // Playlist selection
             <>
-              <button onClick={handleLogout} style={{ margin: '1em 0' }}>
-                Log Out
-              </button>
+              {/* Removed the separate Log Out button from here (now in Settings) */}
               <ul style={{ listStyle: 'none', padding: 0, marginTop: '5vh' }}>
                 {playlists.map(pl => (
                   <li
@@ -788,6 +784,23 @@ function App() {
                       style={{ display: 'block', margin: '10px 0' }}
                     >
                       Reset Personal Views
+                    </button>
+                    <hr style={{ margin: '12px 0', opacity: 0.3 }} />
+                    <button
+                      onClick={handleLogout}
+                      style={{
+                        display: 'block',
+                        margin: '10px 0',
+                        background: '#b00020',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        cursor: 'pointer'
+                      }}
+                      title="Sign out of Google and return to the login screen"
+                    >
+                      Log Out
                     </button>
                   </>
                 )}
