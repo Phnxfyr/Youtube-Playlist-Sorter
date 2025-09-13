@@ -34,10 +34,10 @@ function App() {
   const [volume, setVolume] = useState(50);
   const [lowPowerMode, setLowPowerMode] = useState(false);
   const [iosPrompted, setIosPrompted] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('favorites')) || []);
   const [showFavorites, setShowFavorites] = useState(false);
   const [loopWindow, setLoopWindow] = useState(true); // show only next 10 from current
+  const [searchQuery, setSearchQuery] = useState(''); // <-- single source of truth
 
   const playerRef = useRef(null);
 
@@ -223,7 +223,7 @@ function App() {
     setPlaylistVideos(sorted);
     setCurrentIndex(0);
     setCurrentVideoId(sorted[0]?.snippet?.resourceId?.videoId || null);
-    markActivity(); // user just acted
+    markActivity();
   };
 
   // ===== Sorting & list logic =====
@@ -249,10 +249,10 @@ function App() {
     return sorted;
   };
 
-  // Filter by search/favorites
-  const [searchQuery, setSearchQueryState] = useState('');
-  const setSearchQuerySafe = (v) => { setSearchQueryState(v); markActivity(); };
+  // Search setter that also counts as activity
+  const setSearchQuerySafe = (v) => { setSearchQuery(v); markActivity(); };
 
+  // Filter by search/favorites
   const baseFiltered = React.useMemo(() => {
     return playlistVideos.filter(video => {
       const id = video.snippet.resourceId.videoId;
