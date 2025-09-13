@@ -136,11 +136,16 @@ function App() {
     if (savedLPM) setLowPowerMode(savedLPM === 'true');
   }, []);
 
+  // *** Apply theme + low-power ONLY when logged in ***
   useEffect(() => {
-    document.body.className = theme + (lowPowerMode ? ' low-power' : '');
+    const activeTheme = isLoggedIn ? theme : 'light'; // force light on login screen
+    const lpm = isLoggedIn && lowPowerMode;          // only honor LPM when logged in
+    document.body.className = activeTheme + (lpm ? ' low-power' : '');
+
+    // keep prefs persisted for next session
     localStorage.setItem('theme', theme);
     localStorage.setItem('lowPowerMode', String(lowPowerMode));
-  }, [theme, lowPowerMode]);
+  }, [theme, lowPowerMode, isLoggedIn]);
 
   useEffect(() => {
     localStorage.setItem('personalViews', JSON.stringify(personalViews));
@@ -228,6 +233,14 @@ function App() {
     setFavorites([]);
     localStorage.removeItem('favorites');
     localStorage.removeItem('personalViews');
+
+    // Reset low-power and force light theme visually right away
+    setLowPowerMode(false);
+    localStorage.setItem('lowPowerMode', 'false');
+    document.body.classList.remove('low-power');
+    document.body.classList.remove('dark', 'dracula', 'nord', 'solarized', 'synthwave', 'sepia', 'high-contrast');
+    document.body.classList.add('light');
+
     // hard refresh back to login page (clean)
     window.location.replace(REDIRECT_URI);
   };
@@ -448,8 +461,6 @@ function App() {
   };
 
   const BrandBar = () => {
-    const headerBg = theme === 'dark' ? '#111' : '#fff';
-    const headerFg = theme === 'dark' ? '#fff' : '#111';
     return (
       <div
         style={{
@@ -461,9 +472,9 @@ function App() {
           alignItems: 'center',
           gap: 14,
           padding: '10px 14px',
-          background: headerBg,
-          color: headerFg,
-          borderBottom: theme === 'dark' ? '1px solid #222' : '1px solid #eee'
+          background: 'var(--header-bg)',
+          color: 'var(--header-fg)',
+          borderBottom: '1px solid var(--header-border)'
         }}
       >
         <img
@@ -479,7 +490,7 @@ function App() {
           style={{
             background: 'transparent',
             border: 0,
-            color: headerFg,
+            color: 'var(--header-fg)',
             fontWeight: 600,
             letterSpacing: 0.2,
             cursor: 'pointer'
@@ -497,7 +508,7 @@ function App() {
       {/* Show sticky header only after login */}
       {isLoggedIn && <BrandBar />}
 
-      <div className={`app-container ${theme}`} style={{ display: 'flex' }}>
+      <div className={`app-container ${isLoggedIn ? theme : 'light'}`} style={{ display: 'flex' }}>
         {/* Main content */}
         <div style={{
           flex: 1,
@@ -518,6 +529,7 @@ function App() {
               />
               <button
                 onClick={handleLogin}
+                className="primary"
                 style={{ fontSize: '1.2em', padding: '10px 20px' }}
               >
                 Log in with Google
@@ -658,7 +670,7 @@ function App() {
                       >
                         <span style={{ marginRight: '8px' }}>{i + 1}.</span>
                         <img
-                          src={v.snippet.thumbnails.default.url}
+                          src={v.snippet.thumbnails?.default?.url}
                           alt="thumb"
                           style={{ width: 80, height: 80, marginRight: 10, objectFit: 'cover' }}
                           loading="lazy"
@@ -712,7 +724,7 @@ function App() {
                   >
                     <div style={{ position: 'relative', display: 'inline-block' }}>
                       <img
-                        src={pl.snippet.thumbnails.default.url}
+                        src={pl.snippet.thumbnails?.default?.url}
                         alt="thumbnail"
                         style={{ width: '100px', height: '100px', marginRight: '10px' }}
                       />
@@ -736,7 +748,7 @@ function App() {
 
         {/* Settings drawer */}
         {isLoggedIn && (
-          <div style={{
+          <div className="settings-drawer" style={{
             width: '300px',
             padding: '20px',
             position: 'sticky',
@@ -758,6 +770,7 @@ function App() {
                     Theme
                   </button>
                 </div>
+
                 {activeTab === 'general' && (
                   <>
                     <button
@@ -769,6 +782,7 @@ function App() {
                     <button
                       onClick={() => setLoopWindow(w => !w)}
                       style={{ display: 'block', margin: '10px 0' }}
+                      title="When enabled: shows only the next 10 videos, unplayed first, loops on end."
                     >
                       {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
                     </button>
@@ -787,8 +801,8 @@ function App() {
                       style={{
                         display: 'block',
                         margin: '10px 0',
-                        background: '#b00020',
-                        color: '#fff',
+                        background: 'var(--accent)',
+                        color: 'var(--accent-contrast)',
                         border: 'none',
                         padding: '8px 12px',
                         borderRadius: 6,
@@ -800,14 +814,44 @@ function App() {
                     </button>
                   </>
                 )}
+
                 {activeTab === 'theme' && (
                   <>
-                    <button
-                      onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-                      style={{ display: 'block', margin: '10px 0' }}
+                    <label style={{ display: 'block', margin: '10px 0 6px' }}>Theme</label>
+                    <select
+                      value={theme}
+                      onChange={e => setTheme(e.target.value)}
+                      style={{ display: 'block', width: '100%', padding: '8px', marginBottom: '12px' }}
                     >
-                      {theme === 'light' ? 'Enable Dark Mode' : 'Enable Light Mode'}
-                    </button>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                      <option value="dracula">Dracula</option>
+                      <option value="nord">Nord</option>
+                      <option value="solarized">Solarized</option>
+                      <option value="synthwave">Synthwave</option>
+                      <option value="sepia">Sepia</option>
+                      <option value="high-contrast">High Contrast</option>
+                    </select>
+
+                    {/* Quick palette chips */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                      {[
+                        'light','dark','dracula','nord','solarized','synthwave','sepia','high-contrast'
+                      ].map(name => (
+                        <button
+                          key={name}
+                          onClick={() => setTheme(name)}
+                          title={name}
+                          style={{
+                            width: 28, height: 28, borderRadius: 6,
+                            border: '1px solid var(--ui-border)',
+                            background: name === theme ? 'var(--accent)' : 'var(--card)',
+                            color: 'var(--fg)', cursor: 'pointer'
+                          }}
+                        />
+                      ))}
+                    </div>
+
                     <button
                       onClick={() => setLowPowerMode(l => !l)}
                       style={{ display: 'block', margin: '10px 0' }}
