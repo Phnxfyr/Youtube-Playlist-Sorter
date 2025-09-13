@@ -816,50 +816,32 @@ function App() {
                 )}
 
                 {activeTab === 'theme' && (
-                  <>
-                    <label style={{ display: 'block', margin: '10px 0 6px' }}>Theme</label>
-                    <select
-                      value={theme}
-                      onChange={e => setTheme(e.target.value)}
-                      style={{ display: 'block', width: '100%', padding: '8px', marginBottom: '12px' }}
-                    >
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                      <option value="dracula">Dracula</option>
-                      <option value="nord">Nord</option>
-                      <option value="solarized">Solarized</option>
-                      <option value="synthwave">Synthwave</option>
-                      <option value="sepia">Sepia</option>
-                      <option value="high-contrast">High Contrast</option>
-                    </select>
+  <>
+    <label style={{ display: 'block', margin: '10px 0 6px' }}>Theme</label>
+    <select
+      value={theme}
+      onChange={e => setTheme(e.target.value)}
+      style={{ display: 'block', width: '100%', padding: '8px', marginBottom: '12px' }}
+    >
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+      <option value="dracula">Dracula</option>
+      <option value="nord">Nord</option>
+      <option value="solarized">Solarized</option>
+      <option value="synthwave">Synthwave</option>
+      <option value="sepia">Sepia</option>
+      <option value="high-contrast">High Contrast</option>
+    </select>
 
-                    {/* Quick palette chips */}
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                      {[
-                        'light','dark','dracula','nord','solarized','synthwave','sepia','high-contrast'
-                      ].map(name => (
-                        <button
-                          key={name}
-                          onClick={() => setTheme(name)}
-                          title={name}
-                          style={{
-                            width: 28, height: 28, borderRadius: 6,
-                            border: '1px solid var(--ui-border)',
-                            background: name === theme ? 'var(--accent)' : 'var(--card)',
-                            color: 'var(--fg)', cursor: 'pointer'
-                          }}
-                        />
-                      ))}
-                    </div>
+    <button
+      onClick={() => setLowPowerMode(l => !l)}
+      style={{ display: 'block', margin: '10px 0' }}
+    >
+      {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
+    </button>
+  </>
+)}
 
-                    <button
-                      onClick={() => setLowPowerMode(l => !l)}
-                      style={{ display: 'block', margin: '10px 0' }}
-                    >
-                      {lowPowerMode ? 'Disable Low Power Mode' : 'Enable Low Power Mode'}
-                    </button>
-                  </>
-                )}
               </div>
             )}
           </div>
