@@ -123,7 +123,13 @@ function App() {
       const stateReturned = params.get('state');
 
       // scrub token from address bar immediately
-      history.replaceState({}, document.title, location.pathname + location.search);
+      // new
+	window.history.replaceState(
+		  {},
+		  document.title,
+		  window.location.pathname + window.location.search
+		);
+
 
       // CSRF check
       const expectedState = sessionStorage.getItem(STATE_KEY);
