@@ -37,7 +37,10 @@ function App() {
   const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('favorites')) || []);
   const [showFavorites, setShowFavorites] = useState(false);
   const [loopWindow, setLoopWindow] = useState(true); // show only next 10 from current
-  const [searchQuery, setSearchQuery] = useState(''); // <-- single source of truth
+  const [searchQuery, setSearchQuery] = useState(''); // single source of truth
+
+  // NEW: "Load more" limit for full list mode (+10 each click)
+  const [fullLimit, setFullLimit] = useState(10);
 
   const playerRef = useRef(null);
 
@@ -123,13 +126,11 @@ function App() {
       const stateReturned = params.get('state');
 
       // scrub token from address bar immediately
-      // new
-	window.history.replaceState(
-		  {},
-		  document.title,
-		  window.location.pathname + window.location.search
-		);
-
+      window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname + window.location.search
+      );
 
       // CSRF check
       const expectedState = sessionStorage.getItem(STATE_KEY);
@@ -255,6 +256,11 @@ function App() {
     return sorted;
   };
 
+  // Reset full list limit when view changes
+  useEffect(() => {
+    setFullLimit(10);
+  }, [selectedPlaylist, loopWindow, searchQuery, showFavorites, sortType, sortDirection]);
+
   // Search setter that also counts as activity
   const setSearchQuerySafe = (v) => { setSearchQuery(v); markActivity(); };
 
@@ -288,13 +294,19 @@ function App() {
   const rotateFrom = (arr, startIndex) => (arr.length ? arr.slice(startIndex).concat(arr.slice(0, startIndex)) : arr);
 
   const currentIdxInOrdered = indexIn(orderedFiltered, currentVideoId);
+
+  // Display list:
+  // - Next 10 mode (loopWindow=true): rotate so current is first, then slice(0,10)
+  // - Full list mode: show first `fullLimit` items; "Load more" adds +10
   const displayList = React.useMemo(() => {
     if (!orderedFiltered.length) return [];
-    if (!loopWindow) return orderedFiltered;
-    const start = currentIdxInOrdered >= 0 ? currentIdxInOrdered : 0;
-    const rotated = rotateFrom(orderedFiltered, start);
-    return rotated.slice(0, 10); // show next 10
-  }, [orderedFiltered, loopWindow, currentIdxInOrdered]);
+    if (loopWindow) {
+      const start = currentIdxInOrdered >= 0 ? currentIdxInOrdered : 0;
+      const rotated = rotateFrom(orderedFiltered, start);
+      return rotated.slice(0, 10);
+    }
+    return orderedFiltered.slice(0, fullLimit);
+  }, [orderedFiltered, loopWindow, currentIdxInOrdered, fullLimit]);
 
   // ===== Navigation (wrap-around) =====
   const getOrderedForNav = () => {
@@ -534,14 +546,14 @@ function App() {
               </button>
             </div>
 
-            {/* Video list (ordered, windowed) */}
-            <ul style={{ listStyle: 'none', padding: 0 }}>
+            {/* Video list (no extra safeties; as-is access) */}
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {displayList.map((v, i) => {
                 const id = v.snippet.resourceId.videoId;
                 const played = !!personalViews[id];
                 return (
                   <li
-                    key={id}
+                    key={id + '-' + i}
                     onClick={() => handleVideoClick(i)}
                     style={{
                       display: 'flex',
@@ -555,7 +567,8 @@ function App() {
                     <img
                       src={v.snippet.thumbnails.default.url}
                       alt="thumb"
-                      style={{ width: '80px', height: '80px', marginRight: '10px' }}
+                      style={{ width: 80, height: 80, marginRight: 10, objectFit: 'cover' }}
+                      loading="lazy"
                     />
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <strong>{v.snippet.title}</strong>
@@ -578,6 +591,15 @@ function App() {
                 );
               })}
             </ul>
+
+            {/* Bottom-right Load more (only in Full List mode and when more exist) */}
+            {!loopWindow && fullLimit < orderedFiltered.length && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+                <button onClick={() => setFullLimit(l => l + 10)}>
+                  Load more (+10)
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           // Playlist selection
