@@ -45,11 +45,6 @@ function App() {
   const RESPONSE_TYPE = 'token';
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-  // Auto-logout when idle (no user activity + no recent playback progress)
-  const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 min
-  const INACTIVITY_CHECK_MS = 10 * 1000;      // every 10s
-  const PLAYBACK_RECENT_MS = 30 * 1000;       // recent progress window
-
   // ===== State & refs =====
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [token, setToken] = useState('');
@@ -73,23 +68,16 @@ function App() {
   const [iosPrompted, setIosPrompted] = useState(false);
   const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('favorites')) || []);
   const [showFavorites, setShowFavorites] = useState(false);
-  const [loopWindow, setLoopWindow] = useState(true); // show only next 10 from current
+  const [loopWindow, setLoopWindow] = useState(true); // show only next 10 from current (now: first 10 of sorted list)
   const [searchQuery, setSearchQuery] = useState(''); // single source of truth
   const [fullLimit, setFullLimit] = useState(10);     // "Load more" for full list mode
 
-  // NEW: track most recently played video to bump to bottom
+  // Track most recently played video to bump to bottom
   const [lastPlayedId, setLastPlayedId] = useState(null);
 
   const playerRef = useRef(null);
-
-  // Inactivity + playback tracking
-  const lastActiveRef = useRef(Date.now());
-  const lastPlaybackTickRef = useRef(0);  // last time we saw currentTime change
-  const lastTimeRef = useRef(0);          // last currentTime value
-  const isPlayingRef = useRef(false);
   const progressIntervalRef = useRef(null);
   const countedThisPlayRef = useRef(false); // did we already count this video in current play?
-  const idleIntervalRef = useRef(null);
 
   // OAuth CSRF state
   const STATE_KEY = 'oauth_state';
@@ -135,13 +123,12 @@ function App() {
     setCurrentVideoId(shuffled[0]?.snippet?.resourceId?.videoId || null);
   };
 
-  // *** Apply theme + low-power ONLY when logged in ***
+  // Apply theme + low-power ONLY when logged in
   useEffect(() => {
     const activeTheme = isLoggedIn ? theme : 'light'; // force light on login screen
     const lpm = isLoggedIn && lowPowerMode;          // only honor LPM when logged in
     document.body.className = activeTheme + (lpm ? ' low-power' : '');
 
-    // persist prefs
     localStorage.setItem('theme', theme);
     localStorage.setItem('lowPowerMode', String(lowPowerMode));
   }, [theme, lowPowerMode, isLoggedIn]);
@@ -160,7 +147,6 @@ function App() {
     if (hash) {
       const params = new URLSearchParams(hash.replace('#', '?'));
       const accessToken = params.get('access_token');
-      const expiresIn = Number(params.get('expires_in') || '0');
       const stateReturned = params.get('state');
 
       // scrub token from address bar immediately
@@ -182,15 +168,7 @@ function App() {
         setToken(accessToken);
         setIsLoggedIn(true);
         fetchPlaylists(accessToken);
-
-        // pre-logout when token about to expire
-        if (expiresIn > 0) {
-          const warnMs = Math.max(0, (expiresIn - 60) * 1000);
-          setTimeout(() => {
-            alert('Session expired—please sign in again.');
-            safeLogout();
-          }, warnMs);
-        }
+        // pre-expiry auto logout removed
       }
     }
   }, []);
@@ -274,7 +252,6 @@ function App() {
     setPlaylistVideos(sorted);
     setCurrentIndex(0);
     setCurrentVideoId(sorted[0]?.snippet?.resourceId?.videoId || null);
-    markActivity();
     resetPlaybackCounters();
   };
 
@@ -315,7 +292,7 @@ function App() {
     [lastPlayedId, personalViews]
   );
 
-  // Keep list up-to-date when views change & sorting by "views"
+  // Keep list up-to-date when sort inputs change
   useEffect(() => {
     if (selectedPlaylist && allPlaylistVideos.length) {
       setPlaylistVideos(sortAndBumpLastPlayed(allPlaylistVideos, sortType, sortDirection));
@@ -328,9 +305,6 @@ function App() {
     setFullLimit(10);
   }, [selectedPlaylist, loopWindow, searchQuery, showFavorites, sortType, sortDirection]);
 
-  // Search setter that also counts as activity
-  const setSearchQuerySafe = (v) => { setSearchQuery(v); markActivity(); };
-
   // Filter by search/favorites (respect current playlistVideos order)
   const baseFiltered = React.useMemo(() => {
     return playlistVideos.filter(video => {
@@ -341,26 +315,19 @@ function App() {
     });
   }, [playlistVideos, searchQuery, showFavorites, favorites]);
 
-  // Respect chosen sort order everywhere (no unplayed-first reshuffle)
+  // Respect chosen sort order everywhere (no reshuffle)
   const orderedFiltered = baseFiltered;
 
   const indexIn = (arr, vid) => arr.findIndex(v => v.snippet.resourceId.videoId === vid);
-  const rotateFrom = (arr, startIndex) => (arr.length ? arr.slice(startIndex).concat(arr.slice(0, startIndex)) : arr);
 
-  const currentIdxInOrdered = indexIn(orderedFiltered, currentVideoId);
-
-  // Display list:
-  // - Next 10 mode (loopWindow=true): rotate so current is first, then slice(0,10)
-  // - Full list mode: show first `fullLimit` items; "Load more" adds +10
+  // === FIX: Next 10 uses first 10 of sorted list (no rotation) ===
   const displayList = React.useMemo(() => {
     if (!orderedFiltered.length) return [];
     if (loopWindow) {
-      const start = currentIdxInOrdered >= 0 ? currentIdxInOrdered : 0;
-      const rotated = rotateFrom(orderedFiltered, start);
-      return rotated.slice(0, 10);
+      return orderedFiltered.slice(0, 10);
     }
     return orderedFiltered.slice(0, fullLimit);
-  }, [orderedFiltered, loopWindow, currentIdxInOrdered, fullLimit]);
+  }, [orderedFiltered, loopWindow, fullLimit]);
 
   // ===== Navigation (wrap-around) =====
   const getOrderedForNav = () => {
@@ -380,7 +347,6 @@ function App() {
     setCurrentVideoId(nextId);
     const fullIdx = playlistVideos.findIndex(v => v.snippet.resourceId.videoId === nextId);
     if (fullIdx !== -1) setCurrentIndex(fullIdx);
-    markActivity();
     resetPlaybackCounters();
   };
 
@@ -393,7 +359,6 @@ function App() {
     setCurrentVideoId(prevId);
     const fullIdx = playlistVideos.findIndex(v => v.snippet.resourceId.videoId === prevId);
     if (fullIdx !== -1) setCurrentIndex(fullIdx);
-    markActivity();
     resetPlaybackCounters();
   };
 
@@ -404,7 +369,6 @@ function App() {
     setCurrentVideoId(id);
     const fullIndex = playlistVideos.findIndex(v => v.snippet.resourceId.videoId === id);
     if (fullIndex !== -1) setCurrentIndex(fullIndex);
-    markActivity();
     resetPlaybackCounters();
   };
 
@@ -430,13 +394,9 @@ function App() {
     if (autoPlay) goNext();
   };
 
-  // ===== Inactivity + playback polling =====
-  const markActivity = () => { lastActiveRef.current = Date.now(); };
-
+  // ===== Playback progress polling (no idle logout) =====
   const resetPlaybackCounters = () => {
     countedThisPlayRef.current = false;
-    lastTimeRef.current = 0;
-    lastPlaybackTickRef.current = 0;
   };
 
   const startProgressPolling = () => {
@@ -445,23 +405,8 @@ function App() {
       const p = playerRef.current;
       if (!p) return;
       try {
-        const state = p.getPlayerState?.();
-        // Treat playing & buffering as active
-        if (state === 1 || state === 3) {
-          isPlayingRef.current = true;
-        } else if (state === 2 || state === 0) {
-          isPlayingRef.current = false;
-        }
-
         const cur = typeof p.getCurrentTime === 'function' ? p.getCurrentTime() : 0;
         const dur = typeof p.getDuration === 'function' ? p.getDuration() : 0;
-
-        // If time advanced, mark playback activity
-        if (cur && cur !== lastTimeRef.current) {
-          lastPlaybackTickRef.current = Date.now();
-          lastTimeRef.current = cur;
-          markActivity();
-        }
 
         // 60% watched threshold → count once
         if (!countedThisPlayRef.current && dur > 0 && cur / dur >= 0.6) {
@@ -479,71 +424,20 @@ function App() {
   };
 
   useEffect(() => {
-    // user interaction events
-    const events = ['click', 'mousemove', 'keydown', 'touchstart', 'scroll'];
-    const onAnyActivity = () => markActivity();
-    events.forEach(ev => window.addEventListener(ev, onAnyActivity, { passive: true }));
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) markActivity();
-    });
-
-    // periodic idle check (directly inspects player state/time)
-    idleIntervalRef.current = setInterval(async () => {
-      if (!isLoggedIn) return;
-
-      const now = Date.now();
-      const idleMs = now - lastActiveRef.current;
-
-      // compute playback activity freshly from player
-      let playbackActive = false;
-      try {
-        const p = playerRef.current;
-        if (p) {
-          const st = p.getPlayerState?.();
-          if (st === 1 || st === 3) {
-            playbackActive = true; // playing or buffering
-          }
-          const cur = typeof p.getCurrentTime === 'function' ? p.getCurrentTime() : 0;
-          if (cur && cur !== lastTimeRef.current) {
-            playbackActive = true;
-            lastPlaybackTickRef.current = now;
-            lastTimeRef.current = cur;
-          }
-        }
-      } catch {}
-
-      // also consider recent progress (from the poller)
-      const sincePlaybackMs = now - (lastPlaybackTickRef.current || 0);
-      if (sincePlaybackMs <= PLAYBACK_RECENT_MS) playbackActive = true;
-
-      if (!playbackActive && idleMs >= INACTIVITY_LIMIT_MS) {
-        await safeLogout(); // includes hard redirect
-      }
-    }, INACTIVITY_CHECK_MS);
-
     return () => {
-      events.forEach(ev => window.removeEventListener(ev, onAnyActivity));
-      if (idleIntervalRef.current) clearInterval(idleIntervalRef.current);
       stopProgressPolling();
     };
-  }, [isLoggedIn]); // re-evaluate if login status changes
+  }, []);
 
   // Track player state
-  const onPlayerStateChange = (e) => {
-    const st = e.data;
-    if (st === 1 || st === 3) { // playing or buffering
-      isPlayingRef.current = true;
-      markActivity();
-    } else {
-      isPlayingRef.current = false;
-    }
+  const onPlayerStateChange = () => {
+    // no idle-logout logic anymore
   };
 
   // Start/stop polling when player becomes ready
   const onPlayerReady = (e) => {
     playerRef.current = e.target;
     playerRef.current.setVolume(volume);
-    markActivity();
     startProgressPolling();
   };
 
@@ -692,7 +586,6 @@ function App() {
                     const v = +e.target.value;
                     setVolume(v);
                     if (playerRef.current) playerRef.current.setVolume(v);
-                    markActivity();
                   }}
                   style={{ marginLeft: '10px' }}
                 />
@@ -706,7 +599,6 @@ function App() {
                   onChange={e => {
                     setSortType(e.target.value);
                     setPlaylistVideos(sortAndBumpLastPlayed(allPlaylistVideos, e.target.value, sortDirection));
-                    markActivity();
                   }}
                 >
                   <option value="">None</option>
@@ -723,31 +615,30 @@ function App() {
                       sortType,
                       sortDirection === 'asc' ? 'desc' : 'asc'
                     ));
-                    markActivity();
                   }}
                   style={{ marginLeft: '10px' }}
                 >
                   {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
                 </button>
-                <button onClick={() => { handleShuffle(); markActivity(); }} style={{ marginLeft: '10px' }}>
+                <button onClick={handleShuffle} style={{ marginLeft: '10px' }}>
                   Shuffle
                 </button>
                 <input
                   type="text"
                   placeholder="Search videos…"
                   value={searchQuery}
-                  onChange={e => setSearchQuerySafe(e.target.value)}
+                  onChange={e => setSearchQuery(e.target.value)}
                   style={{ margin: '0 10px' }}
                 />
-                <button onClick={() => { setShowFavorites(f => !f); markActivity(); }}>
+                <button onClick={() => setShowFavorites(f => !f)}>
                   {showFavorites ? 'Show All' : 'Show Favorites'}
                 </button>
                 <button
-                  onClick={() => { setLoopWindow(w => !w); markActivity(); }}
+                  onClick={() => setLoopWindow(w => !w)}
                   style={{ marginLeft: '10px' }}
-                  title="When enabled: shows only the next 10 videos (rotated) in your current sort order."
+                  title="When enabled: shows only the first 10 videos in your current sort."
                 >
-                  {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
+                  {loopWindow ? 'Show Full List' : 'Show Next 10'}
                 </button>
               </div>
 
@@ -786,7 +677,6 @@ function App() {
                             setFavorites(f =>
                               f.includes(id) ? f.filter(x => x !== id) : [...f, id]
                             );
-                            markActivity();
                           }}
                           style={{ fontSize: '1.2em' }}
                           title={favorites.includes(id) ? 'Unfavorite' : 'Favorite'}
@@ -883,9 +773,9 @@ function App() {
                     <button
                       onClick={() => setLoopWindow(w => !w)}
                       style={{ display: 'block', margin: '10px 0' }}
-                      title="Shows either the next 10 (rotated) or the full list in your current sort order."
+                      title="Shows either the first 10 or the full list in your current sort order."
                     >
-                      {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
+                      {loopWindow ? 'Show Full List' : 'Show Next 10'}
                     </button>
                     <button
                       onClick={() => {
