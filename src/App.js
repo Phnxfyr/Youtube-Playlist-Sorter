@@ -48,7 +48,7 @@ function App() {
   // Auto-logout when idle (no user activity + no recent playback progress)
   const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 min
   const INACTIVITY_CHECK_MS = 10 * 1000;      // every 10s
-  const PLAYBACK_RECENT_MS = 30 * 1000;       // if progress moved in last 30s, treat as active
+  const PLAYBACK_RECENT_MS = 30 * 1000;       // recent progress window
 
   // ===== State & refs =====
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -76,6 +76,9 @@ function App() {
   const [loopWindow, setLoopWindow] = useState(true); // show only next 10 from current
   const [searchQuery, setSearchQuery] = useState(''); // single source of truth
   const [fullLimit, setFullLimit] = useState(10);     // "Load more" for full list mode
+
+  // NEW: track most recently played video to bump to bottom
+  const [lastPlayedId, setLastPlayedId] = useState(null);
 
   const playerRef = useRef(null);
 
@@ -126,7 +129,8 @@ function App() {
 
   const handleShuffle = () => {
     const shuffled = shuffleArray(allPlaylistVideos);
-    setPlaylistVideos(shuffled);
+    // After shuffle, still bump last played
+    setPlaylistVideos(sortAndBumpLastPlayed(shuffled, sortType, sortDirection));
     setCurrentIndex(0);
     setCurrentVideoId(shuffled[0]?.snippet?.resourceId?.videoId || null);
   };
@@ -137,7 +141,7 @@ function App() {
     const lpm = isLoggedIn && lowPowerMode;          // only honor LPM when logged in
     document.body.className = activeTheme + (lpm ? ' low-power' : '');
 
-    // keep prefs persisted for next session
+    // persist prefs
     localStorage.setItem('theme', theme);
     localStorage.setItem('lowPowerMode', String(lowPowerMode));
   }, [theme, lowPowerMode, isLoggedIn]);
@@ -225,10 +229,7 @@ function App() {
     setAllPlaylistVideos([]);
     setCurrentIndex(null);
     setCurrentVideoId(null);
-    // KEEP personalViews and favorites across logout:
-    // setFavorites([]) → removed
-    // localStorage.removeItem('favorites') → removed
-    // localStorage.removeItem('personalViews') → removed
+    // KEEP personalViews and favorites across logout
 
     // Reset low-power and force light theme visually right away
     setLowPowerMode(false);
@@ -269,7 +270,7 @@ function App() {
     }
     setSelectedPlaylist(playlist);
     setAllPlaylistVideos(combined);
-    const sorted = sortVideos(combined, sortType, sortDirection);
+    const sorted = sortAndBumpLastPlayed(combined, sortType, sortDirection);
     setPlaylistVideos(sorted);
     setCurrentIndex(0);
     setCurrentVideoId(sorted[0]?.snippet?.resourceId?.videoId || null);
@@ -277,28 +278,50 @@ function App() {
     resetPlaybackCounters();
   };
 
-  // ===== Sorting & list logic =====
-  const sortVideos = (videos, type, direction) => {
-    const factor = direction === 'asc' ? 1 : -1;
-    const sorted = [...videos];
-    if (type === 'title') {
-      sorted.sort((a, b) => a.snippet.title.localeCompare(b.snippet.title) * factor);
-    } else if (type === 'views') {
-      sorted.sort((a, b) =>
-        ((personalViews[b.snippet.resourceId.videoId] || 0) -
-         (personalViews[a.snippet.resourceId.videoId] || 0)) * factor
-      );
-    } else if (type === 'dateAdded') {
-      sorted.sort((a, b) =>
-        (new Date(a.snippet.publishedAt) - new Date(b.snippet.publishedAt)) * factor
-      );
-    } else if (type === 'datePublished') {
-      sorted.sort((a, b) =>
-        (new Date(a.contentDetails.videoPublishedAt) - new Date(b.contentDetails.videoPublishedAt)) * factor
-      );
+  // ===== Sorting =====
+  // Sort, then move the most recently played video to the end
+  const sortAndBumpLastPlayed = React.useCallback(
+    (videos, type, direction) => {
+      const factor = direction === 'asc' ? 1 : -1;
+      const sorted = [...videos];
+
+      if (type === 'title') {
+        sorted.sort((a, b) => a.snippet.title.localeCompare(b.snippet.title) * factor);
+      } else if (type === 'views') {
+        sorted.sort((a, b) => {
+          const av = personalViews[a.snippet.resourceId.videoId] || 0;
+          const bv = personalViews[b.snippet.resourceId.videoId] || 0;
+          return (bv - av) * factor;
+        });
+      } else if (type === 'dateAdded') {
+        sorted.sort((a, b) =>
+          (new Date(a.snippet.publishedAt) - new Date(b.snippet.publishedAt)) * factor
+        );
+      } else if (type === 'datePublished') {
+        sorted.sort((a, b) =>
+          (new Date(a.contentDetails.videoPublishedAt) - new Date(b.contentDetails.videoPublishedAt)) * factor
+        );
+      }
+
+      if (lastPlayedId) {
+        const idx = sorted.findIndex(v => v.snippet.resourceId.videoId === lastPlayedId);
+        if (idx !== -1) {
+          const [item] = sorted.splice(idx, 1);
+          sorted.push(item); // bump to bottom
+        }
+      }
+      return sorted;
+    },
+    [lastPlayedId, personalViews]
+  );
+
+  // Keep list up-to-date when views change & sorting by "views"
+  useEffect(() => {
+    if (selectedPlaylist && allPlaylistVideos.length) {
+      setPlaylistVideos(sortAndBumpLastPlayed(allPlaylistVideos, sortType, sortDirection));
     }
-    return sorted;
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personalViews, lastPlayedId, sortType, sortDirection, selectedPlaylist, allPlaylistVideos.length]);
 
   // Reset full list limit when view changes
   useEffect(() => {
@@ -308,7 +331,7 @@ function App() {
   // Search setter that also counts as activity
   const setSearchQuerySafe = (v) => { setSearchQuery(v); markActivity(); };
 
-  // Filter by search/favorites
+  // Filter by search/favorites (respect current playlistVideos order)
   const baseFiltered = React.useMemo(() => {
     return playlistVideos.filter(video => {
       const id = video.snippet.resourceId.videoId;
@@ -318,21 +341,8 @@ function App() {
     });
   }, [playlistVideos, searchQuery, showFavorites, favorites]);
 
-  // Unplayed first, then played
-  const orderByPlayed = (videos) => {
-    const unplayed = [];
-    const played = [];
-    for (const v of videos) {
-      const id = v.snippet.resourceId.videoId;
-      if (personalViews[id]) played.push(v);
-      else unplayed.push(v);
-    }
-    return [...unplayed, ...played];
-  };
-  const orderedFiltered = React.useMemo(
-    () => orderByPlayed(baseFiltered),
-    [baseFiltered, personalViews]
-  );
+  // Respect chosen sort order everywhere (no unplayed-first reshuffle)
+  const orderedFiltered = baseFiltered;
 
   const indexIn = (arr, vid) => arr.findIndex(v => v.snippet.resourceId.videoId === vid);
   const rotateFrom = (arr, startIndex) => (arr.length ? arr.slice(startIndex).concat(arr.slice(0, startIndex)) : arr);
@@ -406,6 +416,9 @@ function App() {
       ...prev,
       [videoId]: (prev[videoId] || 0) + 1
     }));
+    // remember most recently played and re-apply sort+bump
+    setLastPlayedId(videoId);
+    setPlaylistVideos(sortAndBumpLastPlayed(allPlaylistVideos, sortType, sortDirection));
   };
 
   const handleVideoEnd = () => {
@@ -437,7 +450,6 @@ function App() {
         if (state === 1 || state === 3) {
           isPlayingRef.current = true;
         } else if (state === 2 || state === 0) {
-          // paused or ended
           isPlayingRef.current = false;
         }
 
@@ -455,9 +467,7 @@ function App() {
         if (!countedThisPlayRef.current && dur > 0 && cur / dur >= 0.6) {
           incrementPersonalViewOnce(currentVideoId);
         }
-      } catch (e) {
-        // Some browsers can throw if player not ready; ignore
-      }
+      } catch {}
     }, 2000);
   };
 
@@ -477,16 +487,36 @@ function App() {
       if (!document.hidden) markActivity();
     });
 
-    // periodic idle check
+    // periodic idle check (directly inspects player state/time)
     idleIntervalRef.current = setInterval(async () => {
+      if (!isLoggedIn) return;
+
       const now = Date.now();
       const idleMs = now - lastActiveRef.current;
+
+      // compute playback activity freshly from player
+      let playbackActive = false;
+      try {
+        const p = playerRef.current;
+        if (p) {
+          const st = p.getPlayerState?.();
+          if (st === 1 || st === 3) {
+            playbackActive = true; // playing or buffering
+          }
+          const cur = typeof p.getCurrentTime === 'function' ? p.getCurrentTime() : 0;
+          if (cur && cur !== lastTimeRef.current) {
+            playbackActive = true;
+            lastPlaybackTickRef.current = now;
+            lastTimeRef.current = cur;
+          }
+        }
+      } catch {}
+
+      // also consider recent progress (from the poller)
       const sincePlaybackMs = now - (lastPlaybackTickRef.current || 0);
-      const playbackRecentlyActive = isPlayingRef.current || (sincePlaybackMs <= PLAYBACK_RECENT_MS);
+      if (sincePlaybackMs <= PLAYBACK_RECENT_MS) playbackActive = true;
 
-      if (!isLoggedIn) return; // only enforce while logged in
-
-      if (!playbackRecentlyActive && idleMs >= INACTIVITY_LIMIT_MS) {
+      if (!playbackActive && idleMs >= INACTIVITY_LIMIT_MS) {
         await safeLogout(); // includes hard redirect
       }
     }, INACTIVITY_CHECK_MS);
@@ -619,7 +649,6 @@ function App() {
           ) : selectedPlaylist ? (
             // Video player + list view
             <div style={{ width: '100%', maxWidth: '900px' }}>
-              {/* Use top-left logo/name to go home */}
               <h2>{selectedPlaylist.snippet.title}</h2>
 
               {/* iOS autoplay prompt */}
@@ -676,7 +705,7 @@ function App() {
                   value={sortType}
                   onChange={e => {
                     setSortType(e.target.value);
-                    setPlaylistVideos(sortVideos(allPlaylistVideos, e.target.value, sortDirection));
+                    setPlaylistVideos(sortAndBumpLastPlayed(allPlaylistVideos, e.target.value, sortDirection));
                     markActivity();
                   }}
                 >
@@ -689,7 +718,7 @@ function App() {
                 <button
                   onClick={() => {
                     setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
-                    setPlaylistVideos(sortVideos(
+                    setPlaylistVideos(sortAndBumpLastPlayed(
                       allPlaylistVideos,
                       sortType,
                       sortDirection === 'asc' ? 'desc' : 'asc'
@@ -716,7 +745,7 @@ function App() {
                 <button
                   onClick={() => { setLoopWindow(w => !w); markActivity(); }}
                   style={{ marginLeft: '10px' }}
-                  title="When enabled: shows only the next 10 videos, unplayed first, loops on end."
+                  title="When enabled: shows only the next 10 videos (rotated) in your current sort order."
                 >
                   {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
                 </button>
@@ -854,7 +883,7 @@ function App() {
                     <button
                       onClick={() => setLoopWindow(w => !w)}
                       style={{ display: 'block', margin: '10px 0' }}
-                      title="When enabled: shows only the next 10 videos, unplayed first, loops on end."
+                      title="Shows either the next 10 (rotated) or the full list in your current sort order."
                     >
                       {loopWindow ? 'Show Full List' : 'Show Next 10 (Loop)'}
                     </button>
