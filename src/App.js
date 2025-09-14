@@ -57,17 +57,19 @@ function App() {
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [playlistVideos, setPlaylistVideos] = useState([]);
   const [allPlaylistVideos, setAllPlaylistVideos] = useState([]);
-  const [personalViews, setPersonalViews] = useState({});
+  const [personalViews, setPersonalViews] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('personalViews')) || {}; } catch { return {}; }
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [sortType, setSortType] = useState('');
   const [sortDirection, setSortDirection] = useState('desc');
   const [autoPlay, setAutoPlay] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [currentVideoId, setCurrentVideoId] = useState(null);
   const [volume, setVolume] = useState(50);
-  const [lowPowerMode, setLowPowerMode] = useState(false);
+  const [lowPowerMode, setLowPowerMode] = useState(() => localStorage.getItem('lowPowerMode') === 'true');
   const [iosPrompted, setIosPrompted] = useState(false);
   const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('favorites')) || []);
   const [showFavorites, setShowFavorites] = useState(false);
@@ -128,16 +130,6 @@ function App() {
     setCurrentIndex(0);
     setCurrentVideoId(shuffled[0]?.snippet?.resourceId?.videoId || null);
   };
-
-  // ===== Persist simple prefs =====
-  useEffect(() => {
-    const savedViews = localStorage.getItem('personalViews');
-    if (savedViews) setPersonalViews(JSON.parse(savedViews));
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) setTheme(savedTheme);
-    const savedLPM = localStorage.getItem('lowPowerMode');
-    if (savedLPM) setLowPowerMode(savedLPM === 'true');
-  }, []);
 
   // *** Apply theme + low-power ONLY when logged in ***
   useEffect(() => {
@@ -233,9 +225,10 @@ function App() {
     setAllPlaylistVideos([]);
     setCurrentIndex(null);
     setCurrentVideoId(null);
-    setFavorites([]);
-    localStorage.removeItem('favorites');
-    localStorage.removeItem('personalViews');
+    // KEEP personalViews and favorites across logout:
+    // setFavorites([]) → removed
+    // localStorage.removeItem('favorites') → removed
+    // localStorage.removeItem('personalViews') → removed
 
     // Reset low-power and force light theme visually right away
     setLowPowerMode(false);
@@ -489,7 +482,9 @@ function App() {
       const now = Date.now();
       const idleMs = now - lastActiveRef.current;
       const sincePlaybackMs = now - (lastPlaybackTickRef.current || 0);
-      const playbackRecentlyActive = sincePlaybackMs <= PLAYBACK_RECENT_MS;
+      const playbackRecentlyActive = isPlayingRef.current || (sincePlaybackMs <= PLAYBACK_RECENT_MS);
+
+      if (!isLoggedIn) return; // only enforce while logged in
 
       if (!playbackRecentlyActive && idleMs >= INACTIVITY_LIMIT_MS) {
         await safeLogout(); // includes hard redirect
@@ -501,7 +496,7 @@ function App() {
       if (idleIntervalRef.current) clearInterval(idleIntervalRef.current);
       stopProgressPolling();
     };
-  }, []); // once
+  }, [isLoggedIn]); // re-evaluate if login status changes
 
   // Track player state
   const onPlayerStateChange = (e) => {
